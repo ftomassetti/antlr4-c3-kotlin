@@ -8,44 +8,22 @@ import kotlin.collections.HashSet
  * Based on https://github.com/mike-lischke/antlr4-c3 by Mike Lischke
  */
 
-//'use strict';
-//
-//import { Parser, Vocabulary, Token, TokenStream, RuleContext, ParserRuleContext } from 'antlr4ts';
-//import { ATN, ATNState, ATNStateType, Transition, TransitionType, PredicateTransition, RuleTransition, RuleStartState } from 'antlr4ts/atn';
-//import { IntervalSet } from 'antlr4ts/misc';
-//
-//export type TokenList = number[];
-//export type RuleList = number[];
-
-typealias TokenList = MutableList<Int>
-typealias RuleList = MutableList<Int>
-
-//
-//// All the candidates which have been found. Tokens and rules are separated (both use a numeric value).
-//// Token entries include a list of tokens that directly follow them (see also the "following" member in the FollowSetWithPath class).
-//export class CandidatesCollection {
-//    public tokens: Map<number, TokenList> = new Map();
-//    public rules: Map<number, RuleList> = new Map();
-//};
+typealias TokenKind = Int
+typealias RuleIndex = Int
+typealias TokenList = MutableList<TokenKind>
+typealias RuleList = MutableList<RuleIndex>
 
 // All the candidates which have been found. Tokens and rules are separated (both use a numeric value).
 // Token entries include a list of tokens that directly follow them (see also the "following" member in the FollowSetWithPath class).
-class CandidatesCollection() {
+class CandidatesCollection {
+    // The map keys are the lexer tokens
+    // The list consists of further token ids which directly follow the given token in the grammar (if any)
     var tokens: MutableMap<Int, TokenList> = HashMap()
+    // The map keys are the rule indices
+    // The list represents the call stack at which the given rule was found during evaluation
+    // This allows to determine a context for rules that are used in different places
     var rules: MutableMap<Int, RuleList> = HashMap()
 }
-
-
-//// A record for a follow set along with the path at which this set was found.
-//// If there is only a single symbol in the interval set then we also collect and store tokens which follow
-//// this symbol directly in its rule (i.e. there is no intermediate rule transition). Only single label transitions
-//// are considered. This is useful if you have a chain of tokens which can be suggested as a whole, because there is
-//// a fixed sequence in the grammar.
-//class FollowSetWithPath {
-//    public intervals: IntervalSet;
-//    public path: RuleList = [];
-//    public following: TokenList = [];
-//};
 
 // A record for a follow set along with the path at which this set was found.
 // If there is only a single symbol in the interval set then we also collect and store tokens which follow
@@ -54,66 +32,34 @@ class CandidatesCollection() {
 // a fixed sequence in the grammar.
 
 class FollowSetWithPath {
-    var intervals = IntervalSet()
+    var intervals : IntervalSet? = null
     var path : RuleList = LinkedList()
     var following : TokenList = LinkedList()
 }
-
-
-//// A list of follow sets (for a given state number) + all of them combined for quick hit tests.
-//// This data is static in nature (because the used ATN states are part of a static struct: the ATN).
-//// Hence it can be shared between all C3 instances, however it dependes on the actual parser class (type).
-//class FollowSetsHolder {
-//    public sets: FollowSetWithPath[];
-//    public combined: IntervalSet
-//};
-
 
 // A list of follow sets (for a given state number) + all of them combined for quick hit tests.
 // This data is static in nature (because the used ATN states are part of a static struct: the ATN).
 // Hence it can be shared between all C3 instances, however it dependes on the actual parser class (type).
 class FollowSetsHolder {
-    var sets : MutableList<FollowSetWithPath> = LinkedList<FollowSetWithPath>()
-    var combined = IntervalSet()
+    var sets : MutableList<FollowSetWithPath> = LinkedList()
+    var combined : IntervalSet? = null
 }
 
-//type FollowSetsPerState = Map<number, FollowSetsHolder>;
-
 typealias FollowSetsPerState = MutableMap<Int, FollowSetsHolder>
-
-
-//// Token stream position info after a rule was processed.
-//type RuleEndStatus = Set<number>;
 
 // Token stream position info after a rule was processed.
 typealias RuleEndStatus = MutableSet<Int>
 
-
-//class PipelineEntry {
-//    state: ATNState;
-//    tokenIndex: number;
-//};
-
 data class PipelineEntry(val state: ATNState, val tokenIndex: Int)
-
-
-//// The main class for doing the collection process.
-//export class CodeCompletionCore {
 
 // The main class for doing the collection process.
 class CodeCompletionCore(val parser: Parser) {
 
-//    // Debugging options. Print human readable ATN state and other info.
-//    public showResult = false;                 // Not dependent on showDebugOutput. Prints the collected rules + tokens to terminal.
-//    public showDebugOutput = false;            // Enables printing ATN state info to terminal.
-//    public debugOutputWithTransitions = false; // Only relevant when showDebugOutput is true. Enables transition printing for a state.
-//    public showRuleStack = false;              // Also depends on showDebugOutput. Enables call stack printing for each rule recursion.
-
     // Debugging options. Print human readable ATN state and other info.
-    var showResult = false                 // Not dependent on showDebugOutput. Prints the collected rules + tokens to terminal.
-    var showDebugOutput = false            // Enables printing ATN state info to terminal.
-    var debugOutputWithTransitions = false // Only relevant when showDebugOutput is true. Enables transition printing for a state.
-    var showRuleStack = false              // Also depends on showDebugOutput. Enables call stack printing for each rule recursion.
+    private var showResult = false                 // Not dependent on showDebugOutput. Prints the collected rules + tokens to terminal.
+    private var showDebugOutput = false            // Enables printing ATN state info to terminal.
+    private var debugOutputWithTransitions = false // Only relevant when showDebugOutput is true. Enables transition printing for a state.
+    private var showRuleStack = false              // Also depends on showDebugOutput. Enables call stack printing for each rule recursion.
 
     fun enableDebug() {
         showResult = true
@@ -122,22 +68,10 @@ class CodeCompletionCore(val parser: Parser) {
         showRuleStack = true
     }
 
-//    // Tailoring of the result.
-//    public ignoredTokens: Set<number>;        // Tokens which should not appear in the candidates set.
-//    public preferredRules: Set<number>;       // Rules which replace any candidate token they contain.
-//    // This allows to return descriptive rules (e.g. className, instead of ID/identifier).
-
     // Tailoring of the result.
-    val ignoredTokens = HashSet<Int>()        // Tokens which should not appear in the candidates set.
-    val preferredRules = HashSet<Int>()       // Rules which replace any candidate token they contain.
+    private val ignoredTokens = HashSet<Int>()        // Tokens which should not appear in the candidates set.
+    private val preferredRules = HashSet<Int>()       // Rules which replace any candidate token they contain.
     // This allows to return descriptive rules (e.g. className, instead of ID/identifier).
-
-//
-//    private parser: Parser;
-//    private atn: ATN;
-//    private vocabulary: Vocabulary;
-//    private ruleNames: string[];
-//    private tokens: TokenList;
 
     // parser is in the primary constructor
     private val atn = parser.atn
@@ -145,51 +79,17 @@ class CodeCompletionCore(val parser: Parser) {
     private val ruleNames = parser.ruleNames
     private var tokens : TokenList = LinkedList()
 
-//
-//    private tokenStartIndex: number = 0;
-//
-//    private statesProcessed: number = 0;
-
     private var tokenStartIndex = 0
     private var statesProcessed = 0
-//
-//    // A mapping of rule index + token stream position to end token positions.
-//    // A rule which has been visited before with the same input position will always produce the same output positions.
-//    private shortcutMap: Map<number, Map<number, RuleEndStatus>> = new Map();
-//    private candidates: CandidatesCollection = new CandidatesCollection(); // The collected candidates (rules and tokens).
 
     // A mapping of rule index + token stream position to end token positions.
     // A rule which has been visited before with the same input position will always produce the same output positions.
     private val shortcutMap : MutableMap<Int, MutableMap<Int, RuleEndStatus>> = HashMap()
     private val candidates = CandidatesCollection()
 
-
-//    private static followSetsByATN: Map<string, FollowSetsPerState> = new Map();
-
     companion object {
         val followSetsByATN: MutableMap<String, FollowSetsPerState> = HashMap()
     }
-
-
-//    constructor(parser: Parser) {
-//        this.parser = parser;
-//        this.atn = parser.atn;
-//        this.vocabulary = parser.vocabulary;
-//        this.ruleNames = parser.ruleNames;
-//        this.ignoredTokens = new Set();
-//        this.preferredRules = new Set();
-//    }
-
-// Kotlin: corresponds to the primary constructor
-
-//
-//    /**
-//     * This is the main entry point. The caret token index specifies the token stream index for the token which currently
-//     * covers the caret (or any other position you want to get code completion candidates for).
-//     * Optionally you can pass in a parser rule context which limits the ATN walk to only that or called rules. This can significantly
-//     * speed up the retrieval process but might miss some candidates (if they are outside of the given context).
-//     */
-//    public collectCandidates(caretTokenIndex: number, context?: ParserRuleContext): CandidatesCollection {
 
     /**
      * This is the main entry point. The caret token index specifies the token stream index for the token which currently
@@ -197,20 +97,12 @@ class CodeCompletionCore(val parser: Parser) {
      * Optionally you can pass in a parser rule context which limits the ATN walk to only that or called rules. This can significantly
      * speed up the retrieval process but might miss some candidates (if they are outside of the given context).
      */
-    fun collectCandidates(caretTokenIndex: Int, context: ParserRuleContext?): CandidatesCollection {
-
-//        this.shortcutMap.clear();
-//        this.candidates.rules.clear();
-//        this.candidates.tokens.clear();
-//        this.statesProcessed = 0;
+    fun collectCandidates(caretTokenIndex: Int, context: ParserRuleContext? = null): CandidatesCollection {
 
         this.shortcutMap.clear()
         this.candidates.rules.clear()
         this.candidates.tokens.clear()
         this.statesProcessed = 0
-
-//        this.tokenStartIndex = context ? context.start.tokenIndex : 0;
-//        let tokenStream: TokenStream = this.parser.inputStream;
 
         this.tokenStartIndex = context?.start?.tokenIndex ?: 0
         val tokenStream: TokenStream = this.parser.inputStream
@@ -233,14 +125,14 @@ class CodeCompletionCore(val parser: Parser) {
         var exit = false
         while (!exit) {
             val token = tokenStream.LT(offset++)
-            if (token != null) {
+            //if (token != null) {
                 this.tokens.add(token.type)
                 if (token.tokenIndex >= caretTokenIndex || token.type == Token.EOF) {
                     exit = true
                 }
-            } else {
-                exit = true
-            }
+            //} else {
+            //    exit = true
+            //}
         }
         val currentIndex = tokenStream.index()
         if (currentIndex == -1) {
@@ -846,13 +738,13 @@ class CodeCompletionCore(val parser: Parser) {
         } else {
             if (positionMap.contains(tokenIndex)) {
                 if (this.showDebugOutput) {
-                    println("=====> shortcut");
+                    println("=====> shortcut")
                 }
                 return positionMap[tokenIndex]!!
             }
         }
 
-        var result: RuleEndStatus = HashSet<Int>()
+        var result: RuleEndStatus = HashSet()
 
         // For rule start states we determine and cache the follow set, which gives us 3 advantages:
         // 1) We can quickly check if a symbol would be matched when we follow that rule. We can so check in advance
@@ -896,7 +788,7 @@ class CodeCompletionCore(val parser: Parser) {
                     var fullPath = LinkedList(callStack)
                     fullPath.addAll(set.path)
                     if (!this.translateToRuleIndex(fullPath)) {
-                        for (symbol in set.intervals.toList())
+                        for (symbol in set.intervals!!.toList())
                         if (!this.ignoredTokens.contains(symbol)) {
                             if (this.showDebugOutput) {
                                 println("=====> collected: ${this.vocabulary.getDisplayName(symbol)}")
@@ -905,8 +797,9 @@ class CodeCompletionCore(val parser: Parser) {
                                 this.candidates.tokens.set(symbol, set.following); // Following is empty if there is more than one entry in the set.
                             else {
                                 // More than one following list for the same symbol.
-                                if (this.candidates.tokens.get(symbol) != set.following)
-                                    this.candidates.tokens.set(symbol, LinkedList());
+                                if (this.candidates.tokens.get(symbol) != set.following) {
+                                    this.candidates.tokens.set(symbol, LinkedList())
+                                }
                             }
                         }
                     }
@@ -920,16 +813,16 @@ class CodeCompletionCore(val parser: Parser) {
             // Process the rule if we either could pass it without consuming anything (epsilon transition)
             // or if the current input symbol will be matched somewhere after this entry point.
             // Otherwise stop here.
-            if (!followSets.combined.contains(Token.EPSILON) && !followSets.combined.contains(currentSymbol)) {
-                callStack.pop();
-                return result;
+            if (!followSets.combined!!.contains(Token.EPSILON) && !followSets.combined!!.contains(currentSymbol)) {
+                callStack.pop()
+                return result
             }
         }
 
         // The current state execution pipeline contains all yet-to-be-processed ATN states in this rule.
         // For each such state we store the token index + a list of rules that lead to it.
-        var statePipeline = LinkedList<PipelineEntry>()
-        var currentEntry : PipelineEntry? = null
+        val statePipeline = LinkedList<PipelineEntry>()
+        var currentEntry : PipelineEntry?
 
         // Bootstrap the pipeline.
         statePipeline.push(PipelineEntry(startState, tokenIndex ))
@@ -942,29 +835,29 @@ class CodeCompletionCore(val parser: Parser) {
 
             var atCaret = currentEntry!!.tokenIndex >= this.tokens.size - 1;
             if (this.showDebugOutput) {
-                this.printDescription(indentation, currentEntry.state, this.generateBaseDescription(currentEntry.state), currentEntry.tokenIndex);
+                this.printDescription(indentation, currentEntry.state, this.generateBaseDescription(currentEntry.state), currentEntry.tokenIndex)
                 if (this.showRuleStack)
-                    this.printRuleState(callStack);
+                    this.printRuleState(callStack)
             }
 
             when (currentEntry.state.stateType) {
                 ATNState.RULE_START -> { // Happens only for the first state in this rule, not subrules.
-                    indentation += "  ";
+                    indentation += "  "
                 }
                 ATNState.RULE_STOP -> {
                     // Record the token index we are at, to report it to the caller.
-                    result.add(currentEntry.tokenIndex);
+                    result.add(currentEntry.tokenIndex)
                 }
             }
 
-            var transitions = currentEntry.state.getTransitions();
+            val transitions = currentEntry.state.transitions
             myFor@ for (transition in transitions) {
                 when (transition.serializationType) {
                     Transition.RULE -> {
                         var endStatus = this.processRule(transition.target, currentEntry.tokenIndex, callStack, indentation);
                         for (position in endStatus) {
-                        statePipeline.push(PipelineEntry((transition as RuleTransition).followState, position ))
-                    }
+                           statePipeline.push(PipelineEntry((transition as RuleTransition).followState, position ))
+                        }
                     }
 
                     Transition.PREDICATE -> {
@@ -977,8 +870,9 @@ class CodeCompletionCore(val parser: Parser) {
                         if (atCaret) {
                             if (!this.translateToRuleIndex(callStack)) {
                                 for (token in IntervalSet.of(Token.MIN_USER_TOKEN_TYPE, this.atn.maxTokenType).toList())
-                                if (!this.ignoredTokens.contains(token))
-                                    this.candidates.tokens.set(token, LinkedList());
+                                if (!this.ignoredTokens.contains(token)) {
+                                    this.candidates.tokens[token] = LinkedList()
+                                }
                             }
                         } else {
                             statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex + 1 ))
@@ -1118,23 +1012,23 @@ class CodeCompletionCore(val parser: Parser) {
 
         var output = currentIndent
 
-        var transitionDescription = "";
+        var transitionDescription = ""
         if (this.debugOutputWithTransitions) {
-            for (transition in state.getTransitions()) {
+            for (transition in state.transitions) {
                 var labels = ""
                 var symbols: List<Int> = transition.label()?.toList() ?: emptyList()
                 if (symbols.size > 2) {
                     // Only print start and end symbols to avoid large lists in debug output.
-                    labels = this.vocabulary.getDisplayName(symbols[0]) + " .. " + this.vocabulary.getDisplayName(symbols[symbols.size - 1]);
+                    labels = this.vocabulary.getDisplayName(symbols[0]) + " .. " + this.vocabulary.getDisplayName(symbols[symbols.size - 1])
                 } else {
                     for (symbol in symbols) {
-                        if (labels.length > 0) {
+                        if (labels.isNotEmpty()) {
                             labels += ", "
                         }
                         labels += this.vocabulary.getDisplayName(symbol)
                     }
                 }
-                if (labels.length == 0) {
+                if (labels.isEmpty()) {
                     labels = "ε"
                 }
                 transitionDescription += "\n" + currentIndent + "\t(" + labels + ") " + "[" + transition.target.stateNumber + " " +
@@ -1142,11 +1036,12 @@ class CodeCompletionCore(val parser: Parser) {
             }
         }
 
-        if (tokenIndex >= this.tokens.size - 1)
-            output += "<<" + this.tokenStartIndex + tokenIndex + ">> ";
-        else
-            output += "<" + this.tokenStartIndex + tokenIndex + "> ";
-        println(output + "Current state: " + baseDescription + transitionDescription);
+        if (tokenIndex >= this.tokens.size - 1) {
+            output += "<<" + this.tokenStartIndex + tokenIndex + ">> "
+        } else {
+            output += "<" + this.tokenStartIndex + tokenIndex + "> "
+        }
+        println(output + "Current state: " + baseDescription + transitionDescription)
     }
 
 //
