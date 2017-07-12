@@ -266,6 +266,8 @@ class CodeCompletionCore(val parser: Parser) {
 //        return false;
 //    }
 
+    private val myl = LinkedList<String>()
+
     /**
      * Walks the rule chain upwards to see if that matches any of the preferred rules.
      * If found, that rule is added to the collection candidates and true is returned.
@@ -282,11 +284,10 @@ class CodeCompletionCore(val parser: Parser) {
                 // Add the rule to our candidates list along with the current rule path,
                 // but only if there isn't already an entry like that.
                 var path = ruleStack.subList(0, i)
-                var addNew = true;
+                var addNew = true
                 for (rule in this.candidates.rules) {
                     if (rule.key != ruleStack[i] || rule.value.size != path.size)
                         continue
-                    // TODO translate
                     // Found an entry for this rule. Same path? If so don't add a new (duplicate) entry.
                     var found = false
                     path.forEachIndexed { j, v -> if (v == rule.value[j]) found = true }
@@ -298,8 +299,13 @@ class CodeCompletionCore(val parser: Parser) {
 
                 if (addNew) {
                     this.candidates.rules[ruleStack[i]] = path
-                    if (this.showDebugOutput)
+                    if (this.showDebugOutput) {
                         println("=====> collected: ${this.ruleNames[i]}")
+                        myl.add(this.ruleNames[i])
+                        if (myl.filter { it == this.ruleNames[i] }.size > 10) {
+                            throw RuntimeException("LOOP")
+                        }
+                    }
                 }
                 return true
             }
@@ -725,7 +731,7 @@ class CodeCompletionCore(val parser: Parser) {
      * hit the caret position.
      */
     private fun processRule(startState: ATNState, tokenIndex: Int, callStack: MutableList<Int>, _indentation: String): RuleEndStatus {
-
+        println("PROCESSING ${startState.ruleIndex}")
         var indentation : String = _indentation
 
         // Start with rule specific handling before going into the ATN walk.
@@ -775,7 +781,7 @@ class CodeCompletionCore(val parser: Parser) {
         }
 
         callStack.push(startState.ruleIndex);
-        var currentSymbol = this.tokens[tokenIndex];
+        var currentSymbol = this.tokens[tokenIndex]
 
         if (tokenIndex >= this.tokens.size - 1) { // At caret?
             if (this.preferredRules.contains(startState.ruleIndex)) {
@@ -827,13 +833,25 @@ class CodeCompletionCore(val parser: Parser) {
         // Bootstrap the pipeline.
         statePipeline.push(PipelineEntry(startState, tokenIndex ))
 
+        println("entering pipeline")
+        val processed = LinkedList<PipelineEntry>()
         while (statePipeline.size > 0) {
+            if (statePipeline.size > 1000) {
+                throw RuntimeException("State pipeline way too big")
+            }
+            println("pipeline loop")
             currentEntry = statePipeline.pop()
-            ++this.statesProcessed;
+            if (processed.contains(currentEntry)) {
+                continue
+            } else {
+                processed.add(currentEntry)
+            }
+            ++this.statesProcessed
 
             currentSymbol = this.tokens[currentEntry.tokenIndex]
 
-            var atCaret = currentEntry!!.tokenIndex >= this.tokens.size - 1;
+            val atCaret = currentEntry!!.tokenIndex >= this.tokens.size - 1
+            println("currentEntry $currentEntry atCaret=$atCaret")
             if (this.showDebugOutput) {
                 this.printDescription(indentation, currentEntry.state, this.generateBaseDescription(currentEntry.state), currentEntry.tokenIndex)
                 if (this.showRuleStack)
@@ -852,16 +870,19 @@ class CodeCompletionCore(val parser: Parser) {
 
             val transitions = currentEntry.state.transitions
             myFor@ for (transition in transitions) {
+                println("considering transition $transition -> ${transition.target} ${transition.serializationType}")
                 when (transition.serializationType) {
                     Transition.RULE -> {
-                        var endStatus = this.processRule(transition.target, currentEntry.tokenIndex, callStack, indentation);
+                        var endStatus = this.processRule(transition.target, currentEntry.tokenIndex, callStack, indentation)
                         for (position in endStatus) {
+                           println("pipeline.push A")
                            statePipeline.push(PipelineEntry((transition as RuleTransition).followState, position ))
                         }
                     }
 
                     Transition.PREDICATE -> {
                         if (this.checkPredicate(transition as PredicateTransition)) {
+                            println("pipeline.push B")
                             statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex ))
                         }
                     }
@@ -875,6 +896,7 @@ class CodeCompletionCore(val parser: Parser) {
                                 }
                             }
                         } else {
+                            println("pipeline.push C")
                             statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex + 1 ))
                         }
                     }
@@ -882,7 +904,8 @@ class CodeCompletionCore(val parser: Parser) {
                     else -> {
                         if (transition.isEpsilon) {
                             // Jump over simple states with a single outgoing epsilon transition.
-                            statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex));
+                            println("pipeline.push D")
+                            statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex))
                             continue@myFor
                         }
 
@@ -893,8 +916,8 @@ class CodeCompletionCore(val parser: Parser) {
                             }
                             if (atCaret) {
                                 if (!this.translateToRuleIndex(callStack)) {
-                                    var list = set.toList();
-                                    var addFollowing = list.size == 1;
+                                    var list = set.toList()
+                                    var addFollowing = list.size == 1
                                     for (symbol in list)
                                     if (!this.ignoredTokens.contains(symbol)) {
                                         if (this.showDebugOutput)
@@ -903,7 +926,7 @@ class CodeCompletionCore(val parser: Parser) {
                                         if (addFollowing) {
                                             this.candidates.tokens[symbol] = this.getFollowingTokens(transition)
                                         } else {
-                                            this.candidates.tokens[symbol] = LinkedList();
+                                            this.candidates.tokens[symbol] = LinkedList()
                                         }
                                     }
                                 }
@@ -912,6 +935,7 @@ class CodeCompletionCore(val parser: Parser) {
                                     if (this.showDebugOutput) {
                                         println("=====> consumed: ${this.vocabulary.getDisplayName(currentSymbol)}")
                                     }
+                                    println("pipeline.push E")
                                     statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex + 1 ))
                                 }
                             }
@@ -1075,4 +1099,12 @@ private fun <E> MutableList<E>.push(element: E) {
     this.add(element)
 }
 
-private fun <E> MutableList<E>.pop() = this.removeAt(this.size - 1)
+private fun <E> MutableList<E>.pop() : E {
+    val initialSize = this.size
+    val el = this.removeAt(this.size - 1)
+    val afterSize = this.size
+    if (afterSize != (initialSize - 1)) {
+        throw RuntimeException()
+    }
+    return el
+}

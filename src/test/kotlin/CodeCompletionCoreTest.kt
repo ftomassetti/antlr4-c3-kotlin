@@ -16,7 +16,7 @@ class CodeCompletionCoreTest {
         val lexer = SandyLexer(ANTLRInputStream(ByteArrayInputStream(code.toByteArray(Charset.defaultCharset()))))
         val parser = SandyParser(CommonTokenStream(lexer))
         val codeCompletionCode = CodeCompletionCore(parser)
-        codeCompletionCode.enableDebug()
+        //codeCompletionCode.enableDebug()
         val results = codeCompletionCode.collectCandidates(code.length, null)
         return results.tokens.keys.map { TokenTypeImpl(it) }.toSet()
     }
@@ -37,12 +37,12 @@ class CodeCompletionCoreTest {
                 , TokenTypeImpl(SandyLexer.LPAREN), TokenTypeImpl(SandyLexer.ID)), tokenSuggested(code))
     }
 
-//    @test fun afterLiteral() {
-//        val code = "var a = 1"
-//        assertEquals(setOf(TokenTypeImpl(SandyLexer.NEWLINE), TokenTypeImpl(SandyLexer.EOF), TokenTypeImpl(SandyLexer.PLUS),
-//                TokenTypeImpl(SandyLexer.MINUS), TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
-//                tokenSuggested(code))
-//    }
+    @test fun afterLiteral() {
+        val code = "var a = 1"
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.NEWLINE), TokenTypeImpl(SandyLexer.EOF), TokenTypeImpl(SandyLexer.PLUS),
+                TokenTypeImpl(SandyLexer.MINUS), TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
+                tokenSuggested(code))
+    }
 //
 //    @test fun incompleteAddition() {
 //        val code = "var a = 1 +"
