@@ -110,10 +110,17 @@ class CodeCompletionCore(val parser: Parser) {
 //    public showRuleStack = false;              // Also depends on showDebugOutput. Enables call stack printing for each rule recursion.
 
     // Debugging options. Print human readable ATN state and other info.
-    val showResult = false                 // Not dependent on showDebugOutput. Prints the collected rules + tokens to terminal.
-    val showDebugOutput = false            // Enables printing ATN state info to terminal.
-    val debugOutputWithTransitions = false // Only relevant when showDebugOutput is true. Enables transition printing for a state.
-    val showRuleStack = false              // Also depends on showDebugOutput. Enables call stack printing for each rule recursion.
+    var showResult = false                 // Not dependent on showDebugOutput. Prints the collected rules + tokens to terminal.
+    var showDebugOutput = false            // Enables printing ATN state info to terminal.
+    var debugOutputWithTransitions = false // Only relevant when showDebugOutput is true. Enables transition printing for a state.
+    var showRuleStack = false              // Also depends on showDebugOutput. Enables call stack printing for each rule recursion.
+
+    fun enableDebug() {
+        showResult = true
+        showDebugOutput = true
+        debugOutputWithTransitions = true
+        showRuleStack = true
+    }
 
 //    // Tailoring of the result.
 //    public ignoredTokens: Set<number>;        // Tokens which should not appear in the candidates set.
@@ -220,18 +227,26 @@ class CodeCompletionCore(val parser: Parser) {
 //        }
 //        tokenStream.seek(currentIndex);
 
-        val currentIndex = tokenStream.index()
         tokenStream.seek(this.tokenStartIndex)
         this.tokens = LinkedList()
         var offset = 1
-        while (true) {
-            val token = tokenStream.LT(offset++);
-            this.tokens.add(token.type)
-            if (token.tokenIndex >= caretTokenIndex || token.type == Token.EOF) {
-                break
+        var exit = false
+        while (!exit) {
+            val token = tokenStream.LT(offset++)
+            if (token != null) {
+                this.tokens.add(token.type)
+                if (token.tokenIndex >= caretTokenIndex || token.type == Token.EOF) {
+                    exit = true
+                }
+            } else {
+                exit = true
             }
         }
-        tokenStream.seek(currentIndex)
+        val currentIndex = tokenStream.index()
+        if (currentIndex == -1) {
+            throw RuntimeException("CurrentIndex should be not -1")
+        }
+        tokenStream.seek(tokenStream.index())
 
 
 //        let callStack: number[] = [];
@@ -274,7 +289,31 @@ class CodeCompletionCore(val parser: Parser) {
 //            console.log("\n\n");
 //        }
 
-        // TODO to be translated
+        if (this.showResult) {
+            println("\n\nCollected rules:\n")
+            for (rule in this.candidates.rules) {
+                var path = ""
+                for (token in rule.value) {
+                    path += this.ruleNames[token] + " "
+                }
+                println(this.ruleNames[rule.key] + ", path: " + path)
+            }
+
+            var sortedTokens: MutableSet<String> = HashSet()
+            for (token in this.candidates.tokens) {
+                var value: String = this.vocabulary.getDisplayName(token.key)
+                for (following in token.value)
+                value += " " + this.vocabulary.getDisplayName(following)
+                sortedTokens.add(value);
+            }
+
+            println("\n\nCollected tokens:\n");
+            for (symbol in sortedTokens) {
+                println(symbol)
+            }
+            println("\n\n")
+        }
+
 
 //        return this.candidates;
         return this.candidates
@@ -357,10 +396,12 @@ class CodeCompletionCore(val parser: Parser) {
                         continue
                     // TODO translate
                     // Found an entry for this rule. Same path? If so don't add a new (duplicate) entry.
-                    //if (path.all {v, j -> v === rule[1][j] }) {
-                    //    addNew = false
-                    //    break
-                    //}
+                    var found = false
+                    path.forEachIndexed { j, v -> if (v == rule.value[j]) found = true }
+                    if (found) {
+                        addNew = false
+                        break
+                    }
                 }
 
                 if (addNew) {
