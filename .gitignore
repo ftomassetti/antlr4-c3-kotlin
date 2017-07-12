@@ -1,0 +1,11 @@
+.gradle
+build
+.idea
+*.iml
+generated-src
+out
+*.ipr
+*.iws
+lib
+release
+**/.DS_Store
