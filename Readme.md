@@ -1,6 +1,6 @@
 # ANTLR4-C3-Kotlin
 
-This code is a translation to Kotlin of (antlr4-c3)[https://github.com/mike-lischke/antlr4-c3] by Mike Lischke.
+This code is a translation to Kotlin of [antlr4-c3](https://github.com/mike-lischke/antlr4-c3) by Mike Lischke.
 
 This library provides a grammar agnostic code completion engine for ANTLR4 based parsers, written in TypeScript. The c3 engine is able to provide code completion candidates useful for editors with ANTLR generated parsers, independent of the actual language/grammar used for the generation.
 
