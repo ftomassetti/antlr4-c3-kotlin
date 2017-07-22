@@ -23,6 +23,11 @@ class CandidatesCollection {
     // The list represents the call stack at which the given rule was found during evaluation
     // This allows to determine a context for rules that are used in different places
     var rules: MutableMap<Int, RuleList> = HashMap()
+
+    override fun toString(): String {
+        return "CandidatesCollection(tokens=$tokens, rules=$rules)"
+    }
+
 }
 
 // A record for a follow set along with the path at which this set was found.
@@ -35,6 +40,11 @@ class FollowSetWithPath {
     var intervals : IntervalSet? = null
     var path : RuleList = LinkedList()
     var following : TokenList = LinkedList()
+
+    override fun toString(): String {
+        return "FollowSetWithPath(intervals=$intervals, path=$path, following=$following)"
+    }
+
 }
 
 // A list of follow sets (for a given state number) + all of them combined for quick hit tests.
@@ -43,6 +53,11 @@ class FollowSetWithPath {
 class FollowSetsHolder {
     var sets : MutableList<FollowSetWithPath> = LinkedList()
     var combined : IntervalSet? = null
+
+    override fun toString(): String {
+        return "FollowSetsHolder(sets=$sets, combined=$combined)"
+    }
+
 }
 
 typealias FollowSetsPerState = MutableMap<Int, FollowSetsHolder>
@@ -52,8 +67,18 @@ typealias RuleEndStatus = MutableSet<Int>
 
 data class PipelineEntry(val state: ATNState, val tokenIndex: Int)
 
+fun ATNState.describe(ruleNames: Array<String>) : String {
+    return "[${this.stateNumber}] ${ruleNames[this.ruleIndex]} ${this.stateType} ${this.javaClass.simpleName}"
+}
+
 // The main class for doing the collection process.
 class CodeCompletionCore(val parser: Parser) {
+
+    init {
+        parser.atn.states.forEach {
+            println(it.describe(parser.ruleNames))
+        }
+    }
 
     // Debugging options. Print human readable ATN state and other info.
     private var showResult = false                 // Not dependent on showDebugOutput. Prints the collected rules + tokens to terminal.
@@ -98,7 +123,6 @@ class CodeCompletionCore(val parser: Parser) {
      * speed up the retrieval process but might miss some candidates (if they are outside of the given context).
      */
     fun collectCandidates(caretTokenIndex: Int, context: ParserRuleContext? = null): CandidatesCollection {
-
         this.shortcutMap.clear()
         this.candidates.rules.clear()
         this.candidates.tokens.clear()
@@ -107,6 +131,9 @@ class CodeCompletionCore(val parser: Parser) {
         this.tokenStartIndex = context?.start?.tokenIndex ?: 0
         val tokenStream: TokenStream = this.parser.inputStream
 
+        println("tokenStartIndex: $tokenStartIndex")
+
+        //val currentIndex = tokenStream.index()
         tokenStream.seek(this.tokenStartIndex)
         this.tokens = LinkedList()
         var offset = 1
@@ -118,11 +145,13 @@ class CodeCompletionCore(val parser: Parser) {
                 exit = true
             }
         }
+        println("TOKENS: $tokens")
         val currentIndex = tokenStream.index()
         if (currentIndex == -1) {
             throw RuntimeException("CurrentIndex should be not -1")
         }
-        tokenStream.seek(tokenStream.index())
+        tokenStream.seek(currentIndex)
+        println("currentIndex: $currentIndex")
 
         val callStack: MutableList<Int> = LinkedList()
         val startRule = context?.ruleIndex ?: 0
@@ -157,6 +186,8 @@ class CodeCompletionCore(val parser: Parser) {
             println("\n\n")
         }
 
+        println("CANDIDATES: $candidates")
+
         return this.candidates
     }
 
@@ -174,8 +205,11 @@ class CodeCompletionCore(val parser: Parser) {
      * If found, that rule is added to the collection candidates and true is returned.
      */
     private fun translateToRuleIndex(ruleStack: RuleList): Boolean {
-        if (this.preferredRules.size == 0)
+        println("call to translateToRuleIndex with ruleStack $ruleStack")
+        if (this.preferredRules.size == 0) {
+            println("  translateToRuleIndex returns false")
             return false
+        }
 
         // Loop over the rule stack from highest to lowest rule level. This way we properly handle the higher rule
         // if it contains a lower one that is also a preferred rule.
@@ -199,6 +233,7 @@ class CodeCompletionCore(val parser: Parser) {
                 }
 
                 if (addNew) {
+                    println("  addingNew i=$i path=$path")
                     this.candidates.rules[ruleStack[i]] = path
                     if (this.showDebugOutput) {
                         println("=====> collected: ${this.ruleNames[i]}")
@@ -208,10 +243,12 @@ class CodeCompletionCore(val parser: Parser) {
                         }
                     }
                 }
+                println("  translateToRuleIndex returns true")
                 return true
             }
         }
 
+        println("  translateToRuleIndex returns false")
         return false
     }
 
@@ -320,7 +357,8 @@ class CodeCompletionCore(val parser: Parser) {
      * hit the caret position.
      */
     private fun processRule(startState: ATNState, tokenIndex: Int, callStack: MutableList<Int>, _indentation: String): RuleEndStatus {
-        println("PROCESSING ${startState.ruleIndex}")
+        val ruleName = ruleNames[startState.ruleIndex]
+        println("\nPROCESSING RULE ${startState.ruleIndex} $ruleName")
         var indentation : String = _indentation
 
         // Start with rule specific handling before going into the ATN walk.
@@ -329,7 +367,7 @@ class CodeCompletionCore(val parser: Parser) {
         var positionMap = this.shortcutMap[startState.ruleIndex]
         if (positionMap == null) {
             positionMap = HashMap()
-            this.shortcutMap.set(startState.ruleIndex, positionMap)
+            this.shortcutMap[startState.ruleIndex] = positionMap
         } else {
             if (positionMap.contains(tokenIndex)) {
                 if (this.showDebugOutput) {
@@ -338,6 +376,7 @@ class CodeCompletionCore(val parser: Parser) {
                 return positionMap[tokenIndex]!!
             }
         }
+        println("  positionMap $positionMap")
 
         var result: RuleEndStatus = HashSet()
 
@@ -354,7 +393,7 @@ class CodeCompletionCore(val parser: Parser) {
             CodeCompletionCore.followSetsByATN[this.parser.javaClass.simpleName] = setsPerState
         }
 
-        var followSets = setsPerState.get(startState.stateNumber);
+        var followSets = setsPerState[startState.stateNumber]
         if (followSets == null) {
             followSets = FollowSetsHolder();
             setsPerState.set(startState.stateNumber, followSets);
@@ -368,32 +407,38 @@ class CodeCompletionCore(val parser: Parser) {
             combined.addAll(set.intervals);
             followSets.combined = combined;
         }
+        //println("followSets $followSets")
 
         callStack.push(startState.ruleIndex);
         var currentSymbol = this.tokens[tokenIndex]
 
         if (tokenIndex >= this.tokens.size - 1) { // At caret?
+            //println("  tokenIndex $tokenIndex")
             if (this.preferredRules.contains(startState.ruleIndex)) {
                 // No need to go deeper when collecting entries and we reach a rule that we want to collect anyway.
-                this.translateToRuleIndex(callStack);
+                println("calling translateToRuleIndex to not go deeper, tokenIndex $tokenIndex")
+                this.translateToRuleIndex(callStack)
             } else {
                 // Convert all follow sets to either single symbols or their associated preferred rule and add
                 // the result to our candidates list.
                 for (set in followSets.sets) {
                     var fullPath = LinkedList(callStack)
                     fullPath.addAll(set.path)
+                    println("calling translateToRuleIndex when looking in followSets $set")
                     if (!this.translateToRuleIndex(fullPath)) {
                         for (symbol in set.intervals!!.toList())
                         if (!this.ignoredTokens.contains(symbol)) {
                             if (this.showDebugOutput) {
                                 println("=====> collected: ${this.vocabulary.getDisplayName(symbol)}")
                             }
-                            if (!this.candidates.tokens.contains(symbol))
-                                this.candidates.tokens.set(symbol, set.following); // Following is empty if there is more than one entry in the set.
-                            else {
+                            if (!this.candidates.tokens.contains(symbol)) {
+                                println(" setting candidates token $symbol")
+                                this.candidates.tokens[symbol] = set.following; // Following is empty if there is more than one entry in the set.
+                            } else {
                                 // More than one following list for the same symbol.
-                                if (this.candidates.tokens.get(symbol) != set.following) {
-                                    this.candidates.tokens.set(symbol, LinkedList())
+                                if (this.candidates.tokens[symbol] != set.following) {
+                                    println(" setting candidates token $symbol as empty list")
+                                    this.candidates.tokens[symbol] = LinkedList()
                                 }
                             }
                         }
@@ -422,14 +467,17 @@ class CodeCompletionCore(val parser: Parser) {
         // Bootstrap the pipeline.
         statePipeline.push(PipelineEntry(startState, tokenIndex ))
 
-        println("entering pipeline")
+        println("before looping on the pipeline: $statePipeline")
+
+        //println("entering pipeline")
         val processed = LinkedList<PipelineEntry>()
-        while (statePipeline.size > 0) {
+        pipelineLoop@ while (statePipeline.size > 0) {
             if (statePipeline.size > 1000) {
                 throw RuntimeException("State pipeline way too big")
             }
-            println("pipeline loop")
             currentEntry = statePipeline.pop()
+            println("currentEntry: $currentEntry statePipeline size ${statePipeline.size}")
+            println("  pipeline: $statePipeline")
             if (processed.contains(currentEntry)) {
                 continue
             } else {
@@ -440,7 +488,8 @@ class CodeCompletionCore(val parser: Parser) {
             currentSymbol = this.tokens[currentEntry.tokenIndex]
 
             val atCaret = currentEntry!!.tokenIndex >= this.tokens.size - 1
-            println("currentEntry $currentEntry atCaret=$atCaret")
+            println("atCaret: $atCaret currentEntry.tokenIndex: ${currentEntry!!.tokenIndex} tokens.size: ${tokens.size} currentEntry: ${currentEntry}")
+            //println("currentEntry $currentEntry atCaret=$atCaret")
             if (this.showDebugOutput) {
                 this.printDescription(indentation, currentEntry.state, this.generateBaseDescription(currentEntry.state), currentEntry.tokenIndex)
                 if (this.showRuleStack)
@@ -454,38 +503,41 @@ class CodeCompletionCore(val parser: Parser) {
                 ATNState.RULE_STOP -> {
                     // Record the token index we are at, to report it to the caller.
                     result.add(currentEntry.tokenIndex)
+                    continue@pipelineLoop
                 }
             }
 
             val transitions = currentEntry.state.transitions
             myFor@ for (transition in transitions) {
-                println("considering transition $transition -> ${transition.target} ${transition.serializationType}")
+                //println("considering transition $transition -> ${transition.target} ${transition.serializationType}")
                 when (transition.serializationType) {
                     Transition.RULE -> {
                         var endStatus = this.processRule(transition.target, currentEntry.tokenIndex, callStack, indentation)
                         for (position in endStatus) {
-                           println("pipeline.push A")
+                           println("    pipeline.push A ${(transition as RuleTransition).followState}")
                            statePipeline.push(PipelineEntry((transition as RuleTransition).followState, position ))
                         }
                     }
 
                     Transition.PREDICATE -> {
                         if (this.checkPredicate(transition as PredicateTransition)) {
-                            println("pipeline.push B")
+                            println("    pipeline.push B ${transition.target}")
                             statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex ))
                         }
                     }
 
                     Transition.WILDCARD -> {
                         if (atCaret) {
+                            println("calling translateToRuleIndex because of wildcars")
                             if (!this.translateToRuleIndex(callStack)) {
                                 for (token in IntervalSet.of(Token.MIN_USER_TOKEN_TYPE, this.atn.maxTokenType).toList())
                                 if (!this.ignoredTokens.contains(token)) {
+                                    println(" setting candidates token $token as empty list because of wildcard")
                                     this.candidates.tokens[token] = LinkedList()
                                 }
                             }
                         } else {
-                            println("pipeline.push C")
+                            println("    pipeline.push C ${transition.target}")
                             statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex + 1 ))
                         }
                     }
@@ -493,7 +545,7 @@ class CodeCompletionCore(val parser: Parser) {
                     else -> {
                         if (transition.isEpsilon) {
                             // Jump over simple states with a single outgoing epsilon transition.
-                            println("pipeline.push D")
+                            println("    pipeline.push D ${transition.target}")
                             statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex))
                             continue@myFor
                         }
@@ -504,6 +556,7 @@ class CodeCompletionCore(val parser: Parser) {
                                 set = set.complement(IntervalSet.of(Token.MIN_USER_TOKEN_TYPE, this.atn.maxTokenType));
                             }
                             if (atCaret) {
+                                println("calling translateToRuleIndex because atCaret")
                                 if (!this.translateToRuleIndex(callStack)) {
                                     var list = set.toList()
                                     var addFollowing = list.size == 1
@@ -513,8 +566,10 @@ class CodeCompletionCore(val parser: Parser) {
                                             println("=====> collected: ${this.vocabulary.getDisplayName(symbol)}")
 
                                         if (addFollowing) {
+                                            println(" setting candidates token $symbol (caret, addFollowing)")
                                             this.candidates.tokens[symbol] = this.getFollowingTokens(transition)
                                         } else {
+                                            println(" setting candidates token $symbol (caret, no addFollowing)")
                                             this.candidates.tokens[symbol] = LinkedList()
                                         }
                                     }
@@ -524,7 +579,7 @@ class CodeCompletionCore(val parser: Parser) {
                                     if (this.showDebugOutput) {
                                         println("=====> consumed: ${this.vocabulary.getDisplayName(currentSymbol)}")
                                     }
-                                    println("pipeline.push E")
+                                    println("    pipeline.push E ${transition.target}")
                                     statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex + 1 ))
                                 }
                             }
@@ -558,14 +613,12 @@ class CodeCompletionCore(val parser: Parser) {
         "loop end"
     )
 
-
     private fun generateBaseDescription(state: ATNState): String {
         var stateValue = if (state.stateNumber == ATNState.INVALID_STATE_NUMBER) "Invalid" else state.stateNumber;
         return "[" + stateValue + " " + this.atnStateTypeMap[state.stateType] + "] in " + this.ruleNames[state.ruleIndex]
     }
 
     private fun printDescription(currentIndent: String, state: ATNState, baseDescription: String, tokenIndex: Int) {
-
         var output = currentIndent
 
         var transitionDescription = ""

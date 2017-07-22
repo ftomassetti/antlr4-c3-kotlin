@@ -49,48 +49,48 @@ class CodeCompletionCoreTest {
         assertEquals(setOf(TokenTypeImpl(SandyLexer.LPAREN), TokenTypeImpl(SandyLexer.ID), TokenTypeImpl(SandyLexer.MINUS),
                 TokenTypeImpl(SandyLexer.INTLIT), TokenTypeImpl(SandyLexer.DECLIT)), tokenSuggested(code))
     }
-//
-//    @test fun incompleteParenthesis() {
-//        val code = "var a = (1"
-//        assertEquals(setOf(TokenTypeImpl(SandyLexer.RPAREN), TokenTypeImpl(SandyLexer.PLUS), TokenTypeImpl(SandyLexer.MINUS),
-//                TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
-//                tokenSuggested(code))
-//    }
-//
-//    @test fun incompleteComplexParenthesis() {
-//        val code = "var a = (1+1"
-//        assertEquals(setOf(TokenTypeImpl(SandyLexer.RPAREN), TokenTypeImpl(SandyLexer.PLUS), TokenTypeImpl(SandyLexer.MINUS),
-//                TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
-//                tokenSuggested(code))
-//    }
-//
-//    @test fun incompleteMoreComplexParenthesis() {
-//        val code = "var a = (1+1*"
-//        assertEquals(setOf(TokenTypeImpl(SandyLexer.LPAREN), TokenTypeImpl(SandyLexer.ID), TokenTypeImpl(SandyLexer.MINUS),
-//                TokenTypeImpl(SandyLexer.INTLIT), TokenTypeImpl(SandyLexer.DECLIT)),
-//                tokenSuggested(code))
-//    }
-//
-//    @test fun startedParenthesis() {
-//        val code = "var a = ("
-//        assertEquals(setOf(TokenTypeImpl(SandyLexer.LPAREN), TokenTypeImpl(SandyLexer.INTLIT), TokenTypeImpl(SandyLexer.MINUS),
-//                TokenTypeImpl(SandyLexer.DECLIT), TokenTypeImpl(SandyLexer.ID)),
-//                tokenSuggested(code))
-//    }
-//
-//    @test fun incompleteAnnidatedParenthesis() {
-//        val code = "var a = ((1+1)"
-//        assertEquals(setOf(TokenTypeImpl(SandyLexer.RPAREN), TokenTypeImpl(SandyLexer.PLUS), TokenTypeImpl(SandyLexer.MINUS),
-//                TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
-//                tokenSuggested(code))
-//    }
-//
-//    @test fun completeAnnidatedParenthesis() {
-//        val code = "var a = ((1))"
-//        assertEquals(setOf(TokenTypeImpl(SandyLexer.NEWLINE), TokenTypeImpl(SandyLexer.EOF),
-//                TokenTypeImpl(SandyLexer.PLUS), TokenTypeImpl(SandyLexer.MINUS),
-//                TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
-//                tokenSuggested(code))
-//    }
+
+    @test fun incompleteParenthesis() {
+        val code = "var a = (1"
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.RPAREN), TokenTypeImpl(SandyLexer.PLUS), TokenTypeImpl(SandyLexer.MINUS),
+                TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
+                tokenSuggested(code))
+    }
+
+    @test fun incompleteComplexParenthesis() {
+        val code = "var a = (1+1"
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.RPAREN), TokenTypeImpl(SandyLexer.PLUS), TokenTypeImpl(SandyLexer.MINUS),
+                TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
+                tokenSuggested(code))
+    }
+
+    @test fun incompleteMoreComplexParenthesis() {
+        val code = "var a = (1+1*"
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.LPAREN), TokenTypeImpl(SandyLexer.ID), TokenTypeImpl(SandyLexer.MINUS),
+                TokenTypeImpl(SandyLexer.INTLIT), TokenTypeImpl(SandyLexer.DECLIT)),
+                tokenSuggested(code))
+    }
+
+    @test fun startedParenthesis() {
+        val code = "var a = ("
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.LPAREN), TokenTypeImpl(SandyLexer.INTLIT), TokenTypeImpl(SandyLexer.MINUS),
+                TokenTypeImpl(SandyLexer.DECLIT), TokenTypeImpl(SandyLexer.ID)),
+                tokenSuggested(code))
+    }
+
+    @test fun incompleteAnnidatedParenthesis() {
+        val code = "var a = ((1+1)"
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.RPAREN), TokenTypeImpl(SandyLexer.PLUS), TokenTypeImpl(SandyLexer.MINUS),
+                TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
+                tokenSuggested(code))
+    }
+
+    @test fun completeAnnidatedParenthesis() {
+        val code = "var a = ((1))"
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.NEWLINE), TokenTypeImpl(SandyLexer.EOF),
+                TokenTypeImpl(SandyLexer.PLUS), TokenTypeImpl(SandyLexer.MINUS),
+                TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
+                tokenSuggested(code))
+    }
 
 }
