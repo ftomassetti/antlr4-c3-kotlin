@@ -584,7 +584,7 @@ class CodeCompletionCore(val parser: Parser) {
                 var symbols: List<Int> = transition.label()?.toList() ?: emptyList()
                 if (symbols.size > 2) {
                     // Only print start and end symbols to avoid large lists in debug output.
-                    labels = this.vocabulary.getDisplayName(symbols[0]) + " .. " + this.vocabulary.getDisplayName(symbols[symbols.size - 1])
+                    labels = this.vocabulary.getDisplayName(symbols[0]) + "src/test " + this.vocabulary.getDisplayName(symbols[symbols.size - 1])
                 } else {
                     for (symbol in symbols) {
                         if (labels.isNotEmpty()) {

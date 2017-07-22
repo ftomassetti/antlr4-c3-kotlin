@@ -1,5 +1,4 @@
 language: java
-before_script: ./gradlew generateTestGrammarSource
 script: ./gradlew check
 jdk:
   - oraclejdk8
