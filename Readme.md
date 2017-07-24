@@ -8,6 +8,22 @@ This library provides a grammar agnostic code completion engine for ANTLR4 based
 
 Being written in Kotlin the idea is to be reuse the same Kotlin on the JVM and in the browser.
 
+## API
+
+The high level API can be used very simply by specifying the lexer class, the parser class and the code to be completed. It will return the set of token types that are expected:
+
+```kotlin
+val expectedTokenTypes = tokenSuggested("var a = 1 +", SandyLexer::class.java, SandyParser::class.java)
+```
+
+In this case the result will be a list of token types representing:
+
+* a left parenthesis
+* the minus sign
+* an ID
+* an integer literal
+* a decimal literal
+
 ## License
 
 This code is released under the MIT License
