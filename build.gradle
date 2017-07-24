@@ -17,8 +17,10 @@ buildscript {
 
 def c3Version = '0.1.0'
 
-task version << {
-    print "Version ${c3Version}"
+task version {
+    doLast {
+        print "Version ${c3Version}"
+    }
 }
 
 apply plugin: 'kotlin'

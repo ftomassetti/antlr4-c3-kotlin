@@ -1,3 +1,11 @@
+// This file is released under the MIT license.
+// Copyright (c) 2016-2017, Mike Lischke, Federico Tomassetti
+//
+// See LICENSE file for more info.
+
+package me.tomassetti.antlr4c3.api
+
+import me.tomassetti.antlr4c3.CodeCompletionCore
 import org.antlr.v4.runtime.*
 import java.io.ByteArrayInputStream
 import java.nio.charset.Charset

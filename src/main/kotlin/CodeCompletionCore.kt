@@ -1,12 +1,15 @@
+// This file is released under the MIT license.
+// Copyright (c) 2016-2017, Mike Lischke, Federico Tomassetti
+//
+// See LICENSE file for more info.
+
+package me.tomassetti.antlr4c3
+
 import org.antlr.v4.runtime.*
 import org.antlr.v4.runtime.atn.*
 import org.antlr.v4.runtime.misc.IntervalSet
 import java.util.*
 import kotlin.collections.HashSet
-
-/*
- * Based on https://github.com/mike-lischke/antlr4-c3 by Mike Lischke
- */
 
 typealias TokenKind = Int
 typealias RuleIndex = Int
@@ -377,12 +380,12 @@ class CodeCompletionCore(val parser: Parser) {
         if (followSets == null) {
             followSets = FollowSetsHolder();
             setsPerState.set(startState.stateNumber, followSets);
-            var stop = this.atn.ruleToStopState[startState.ruleIndex];
+            val stop = this.atn.ruleToStopState[startState.ruleIndex];
             followSets.sets = this.determineFollowSets(startState, stop);
 
             // Sets are split by path to allow translating them to preferred rules. But for quick hit tests
             // it is also useful to have a set with all symbols combined.
-            var combined = IntervalSet()
+            val combined = IntervalSet()
             for (set in followSets.sets)
             combined.addAll(set.intervals);
             followSets.combined = combined;
@@ -622,6 +625,10 @@ class CodeCompletionCore(val parser: Parser) {
 
 }
 
+//
+// Utils
+//
+
 private fun <E> MutableList<E>.push(element: E) {
     this.add(element)
 }
@@ -635,3 +642,4 @@ private fun <E> MutableList<E>.pop() : E {
     }
     return el
 }
+

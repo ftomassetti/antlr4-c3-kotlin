@@ -1,12 +1,18 @@
+// This file is released under the MIT license.
+// Copyright (c) 2016-2017, Mike Lischke, Federico Tomassetti
+//
+// See LICENSE file for more info.
+
 import me.tomassetti.antlr4c3.SandyLexer
 import me.tomassetti.antlr4c3.SandyParser
+import me.tomassetti.antlr4c3.api.TokenTypeImpl
 import kotlin.test.assertEquals
 import org.junit.Test as test
 
 class CodeCompletionCoreTest {
 
     fun tokenSuggested(code: String) : Set<TokenTypeImpl> {
-        return tokenSuggested(code, SandyLexer::class.java, SandyParser::class.java)
+        return me.tomassetti.antlr4c3.api.tokenSuggested(code, SandyLexer::class.java, SandyParser::class.java)
     }
 
     @test fun emptyFile() {
