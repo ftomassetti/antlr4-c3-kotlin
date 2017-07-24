@@ -16,6 +16,10 @@ class CodeCompletionCoreTest {
         return me.tomassetti.antlr4c3.api.tokenSuggested(code, SandyLexer::class.java, SandyParser::class.java)
     }
 
+    fun tokenSuggestedWSP(code: String) : Set<TokenTypeImpl> {
+        return me.tomassetti.antlr4c3.api.tokenSuggestedWithoutSemanticPredicates(code, SandyLexer::class.java, SandyParser::class.java)
+    }
+
     @test fun emptyFile() {
         val code = ""
         assertEquals(setOf(TokenTypeImpl(SandyLexer.VAR), TokenTypeImpl(SandyLexer.ID)), tokenSuggested(code))
@@ -88,4 +92,75 @@ class CodeCompletionCoreTest {
                 tokenSuggested(code))
     }
 
+    @test fun emptyFileWithoutSemanticPredicates() {
+        val code = ""
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.VAR), TokenTypeImpl(SandyLexer.ID)), tokenSuggestedWSP(code))
+    }
+
+    @test fun afterVarWithoutSemanticPredicates() {
+        val code = "var"
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.ID)), tokenSuggestedWSP(code))
+    }
+
+    @test fun afterEqualsWithoutSemanticPredicates() {
+        val code = "var a ="
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.INTLIT), TokenTypeImpl(SandyLexer.DECLIT), TokenTypeImpl(SandyLexer.MINUS)
+                , TokenTypeImpl(SandyLexer.LPAREN), TokenTypeImpl(SandyLexer.ID)), tokenSuggestedWSP(code))
+    }
+
+    @test fun afterLiteralWithoutSemanticPredicates() {
+        val code = "var a = 1"
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.NEWLINE), TokenTypeImpl(SandyLexer.EOF), TokenTypeImpl(SandyLexer.PLUS),
+                TokenTypeImpl(SandyLexer.MINUS), TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
+                tokenSuggestedWSP(code))
+    }
+
+    @test fun incompleteAdditionWithoutSemanticPredicates() {
+        val code = "var a = 1 +"
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.LPAREN), TokenTypeImpl(SandyLexer.ID), TokenTypeImpl(SandyLexer.MINUS),
+                TokenTypeImpl(SandyLexer.INTLIT), TokenTypeImpl(SandyLexer.DECLIT)), tokenSuggestedWSP(code))
+    }
+
+    @test fun incompleteParenthesisWithoutSemanticPredicates() {
+        val code = "var a = (1"
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.RPAREN), TokenTypeImpl(SandyLexer.PLUS), TokenTypeImpl(SandyLexer.MINUS),
+                TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
+                tokenSuggestedWSP(code))
+    }
+
+    @test fun incompleteComplexParenthesisWithoutSemanticPredicates() {
+        val code = "var a = (1+1"
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.RPAREN), TokenTypeImpl(SandyLexer.PLUS), TokenTypeImpl(SandyLexer.MINUS),
+                TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
+                tokenSuggestedWSP(code))
+    }
+
+    @test fun incompleteMoreComplexParenthesisWithoutSemanticPredicates() {
+        val code = "var a = (1+1*"
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.LPAREN), TokenTypeImpl(SandyLexer.ID), TokenTypeImpl(SandyLexer.MINUS),
+                TokenTypeImpl(SandyLexer.INTLIT), TokenTypeImpl(SandyLexer.DECLIT)),
+                tokenSuggestedWSP(code))
+    }
+
+    @test fun startedParenthesisWithoutSemanticPredicates() {
+        val code = "var a = ("
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.LPAREN), TokenTypeImpl(SandyLexer.INTLIT), TokenTypeImpl(SandyLexer.MINUS),
+                TokenTypeImpl(SandyLexer.DECLIT), TokenTypeImpl(SandyLexer.ID)),
+                tokenSuggestedWSP(code))
+    }
+
+    @test fun incompleteAnnidatedParenthesisWithoutSemanticPredicates() {
+        val code = "var a = ((1+1)"
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.RPAREN), TokenTypeImpl(SandyLexer.PLUS), TokenTypeImpl(SandyLexer.MINUS),
+                TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
+                tokenSuggestedWSP(code))
+    }
+
+    @test fun completeAnnidatedParenthesisWithoutSemanticPredicates() {
+        val code = "var a = ((1))"
+        assertEquals(setOf(TokenTypeImpl(SandyLexer.NEWLINE), TokenTypeImpl(SandyLexer.EOF),
+                TokenTypeImpl(SandyLexer.PLUS), TokenTypeImpl(SandyLexer.MINUS),
+                TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
+                tokenSuggestedWSP(code))
+    }
 }

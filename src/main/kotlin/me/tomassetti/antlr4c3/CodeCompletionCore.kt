@@ -8,6 +8,8 @@ package me.tomassetti.antlr4c3
 import org.antlr.v4.runtime.*
 import org.antlr.v4.runtime.atn.*
 import org.antlr.v4.runtime.misc.IntervalSet
+import java.io.ByteArrayInputStream
+import java.nio.charset.Charset
 import java.util.*
 import kotlin.collections.HashSet
 
@@ -106,6 +108,31 @@ class ByStreamTokenProvider(val tokenStream: TokenStream,
 
 }
 
+class ByParserClassTokenProvider<L: Lexer, P: Parser>(val lexerClass: Class<L>, val parserClass: Class<P>, val code: String) : TokensProvider {
+    override fun tokens(): TokenList {
+        val lexerConstructor = lexerClass.constructors.find { it.parameterCount == 1 && it.parameterTypes[0] == CharStream::class.java }!!
+        var charStream = ANTLRInputStream(ByteArrayInputStream(code.toByteArray(Charset.defaultCharset())))
+        val lexer = lexerConstructor.newInstance(charStream) as Lexer
+        val tokens = LinkedList<Int>()
+        val tokenStream = CommonTokenStream(lexer)
+        var offset = 1
+        var exit = false
+        while (!exit) {
+            val token = tokenStream.LT(offset++)
+            tokens.add(token.type)
+            if (token.type == Token.EOF) {
+                exit = true
+            }
+        }
+        return tokens
+    }
+
+    override fun tokensStartIndex() = 0
+
+    override fun startRuleIndex() = 0
+
+}
+
 // The main class for doing the collection process.
 class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames: Array<String>,
                          val languageName : String,
@@ -150,6 +177,13 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
         private val followSetsByATN: MutableMap<String, FollowSetsPerState> = HashMap()
 
         fun fromParser(parser: Parser) = CodeCompletionCore(parser.atn, parser.vocabulary, parser.ruleNames, parser.javaClass.simpleName, parser)
+
+        fun <P: Parser> fromParserClass(parserClass: Class<P>) : CodeCompletionCore {
+            val atn = parserClass.getField("_ATN").get(null) as ATN
+            val vocabulary = parserClass.getField("VOCABULARY").get(null) as Vocabulary
+            val ruleNames = parserClass.getField("ruleNames").get(null) as Array<String>
+            return CodeCompletionCore(atn, vocabulary, ruleNames, parserClass.simpleName, null)
+        }
     }
 
     fun collectCandidates(tokenStream: TokenStream, caretTokenIndex: Int, context: ParserRuleContext? = null): CandidatesCollection {

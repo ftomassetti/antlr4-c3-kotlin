@@ -5,6 +5,7 @@
 
 package me.tomassetti.antlr4c3.api
 
+import me.tomassetti.antlr4c3.ByParserClassTokenProvider
 import me.tomassetti.antlr4c3.CodeCompletionCore
 import org.antlr.v4.runtime.*
 import java.io.ByteArrayInputStream
@@ -22,5 +23,12 @@ fun <L : Lexer, P : Parser> tokenSuggested(code: String, lexerClass: Class<L>, p
     val codeCompletionCode = CodeCompletionCore.fromParser(parser)
 
     val results = codeCompletionCode.collectCandidates(parser.tokenStream, code.length)
+    return results.tokens.keys.map { TokenTypeImpl(it) }.toSet()
+}
+
+fun <L : Lexer, P : Parser> tokenSuggestedWithoutSemanticPredicates(code: String, lexerClass: Class<L>, parserClass: Class<P>) : Set<TokenTypeImpl> {
+    val codeCompletionCode = CodeCompletionCore.fromParserClass(parserClass)
+
+    val results = codeCompletionCode.collectCandidates(ByParserClassTokenProvider(lexerClass, parserClass, code))
     return results.tokens.keys.map { TokenTypeImpl(it) }.toSet()
 }
