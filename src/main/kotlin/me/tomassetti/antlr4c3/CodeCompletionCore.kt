@@ -70,10 +70,6 @@ private typealias RuleEndStatus = MutableSet<Int>
 
 private data class PipelineEntry(val state: ATNState, val tokenIndex: Int)
 
-fun ATNState.describe(ruleNames: Array<String>) : String {
-    return "[${this.stateNumber}] ${ruleNames[this.ruleIndex]} ${this.stateType} ${this.javaClass.simpleName}"
-}
-
 // The main class for doing the collection process.
 class CodeCompletionCore(val parser: Parser) {
 
@@ -155,18 +151,18 @@ class CodeCompletionCore(val parser: Parser) {
 
         if (this.showResult) {
             println("\n\nCollected rules:\n")
-            for (rule in this.candidates.rules) {
+            for ((key, value) in this.candidates.rules) {
                 var path = ""
-                for (token in rule.value) {
+                for (token in value) {
                     path += this.ruleNames[token] + " "
                 }
-                println(this.ruleNames[rule.key] + ", path: " + path)
+                println(this.ruleNames[key] + ", path: " + path)
             }
 
-            var sortedTokens: MutableSet<String> = HashSet()
-            for (token in this.candidates.tokens) {
-                var value: String = this.vocabulary.getDisplayName(token.key)
-                for (following in token.value)
+            val sortedTokens: MutableSet<String> = HashSet()
+            for ((key, value1) in this.candidates.tokens) {
+                var value: String = this.vocabulary.getDisplayName(key)
+                for (following in value1)
                 value += " " + this.vocabulary.getDisplayName(following)
                 sortedTokens.add(value);
             }
@@ -550,7 +546,7 @@ class CodeCompletionCore(val parser: Parser) {
         callStack.pop()
 
         // Cache the result, for later lookup to avoid duplicate walks.
-        positionMap.set(tokenIndex, result)
+        positionMap[tokenIndex] = result
 
         return result
     }
@@ -572,8 +568,8 @@ class CodeCompletionCore(val parser: Parser) {
     )
 
     private fun generateBaseDescription(state: ATNState): String {
-        var stateValue = if (state.stateNumber == ATNState.INVALID_STATE_NUMBER) "Invalid" else state.stateNumber;
-        return "[" + stateValue + " " + this.atnStateTypeMap[state.stateType] + "] in " + this.ruleNames[state.ruleIndex]
+        val stateValue = if (state.stateNumber == ATNState.INVALID_STATE_NUMBER) "Invalid" else state.stateNumber.toString()
+        return "[$stateValue ${this.atnStateTypeMap[state.stateType]}] in ${this.ruleNames[state.ruleIndex]}"
     }
 
     private fun printDescription(currentIndent: String, state: ATNState, baseDescription: String, tokenIndex: Int) {
@@ -583,7 +579,7 @@ class CodeCompletionCore(val parser: Parser) {
         if (this.debugOutputWithTransitions) {
             for (transition in state.transitions) {
                 var labels = ""
-                var symbols: List<Int> = transition.label()?.toList() ?: emptyList()
+                val symbols: List<Int> = transition.label()?.toList() ?: emptyList()
                 if (symbols.size > 2) {
                     // Only print start and end symbols to avoid large lists in debug output.
                     labels = this.vocabulary.getDisplayName(symbols[0]) + "src/test " + this.vocabulary.getDisplayName(symbols[symbols.size - 1])
@@ -604,9 +600,9 @@ class CodeCompletionCore(val parser: Parser) {
         }
 
         if (tokenIndex >= this.tokens.size - 1) {
-            output += "<<" + this.tokenStartIndex + tokenIndex + ">> "
+            output += "<<${this.tokenStartIndex}$tokenIndex>> "
         } else {
-            output += "<" + this.tokenStartIndex + tokenIndex + "> "
+            output += "<${this.tokenStartIndex}$tokenIndex> "
         }
         println(output + "Current state: " + baseDescription + transitionDescription)
     }
