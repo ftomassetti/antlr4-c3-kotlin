@@ -39,7 +39,7 @@ class CandidatesCollection {
 // are considered. This is useful if you have a chain of tokens which can be suggested as a whole, because there is
 // a fixed sequence in the grammar.
 
-class FollowSetWithPath {
+private class FollowSetWithPath {
     var intervals : IntervalSet? = null
     var path : RuleList = LinkedList()
     var following : TokenList = LinkedList()
@@ -53,7 +53,7 @@ class FollowSetWithPath {
 // A list of follow sets (for a given state number) + all of them combined for quick hit tests.
 // This data is static in nature (because the used ATN states are part of a static struct: the ATN).
 // Hence it can be shared between all C3 instances, however it dependes on the actual parser class (type).
-class FollowSetsHolder {
+private class FollowSetsHolder {
     var sets : MutableList<FollowSetWithPath> = LinkedList()
     var combined : IntervalSet? = null
 
@@ -63,12 +63,12 @@ class FollowSetsHolder {
 
 }
 
-typealias FollowSetsPerState = MutableMap<Int, FollowSetsHolder>
+private typealias FollowSetsPerState = MutableMap<Int, FollowSetsHolder>
 
 // Token stream position info after a rule was processed.
-typealias RuleEndStatus = MutableSet<Int>
+private typealias RuleEndStatus = MutableSet<Int>
 
-data class PipelineEntry(val state: ATNState, val tokenIndex: Int)
+private data class PipelineEntry(val state: ATNState, val tokenIndex: Int)
 
 fun ATNState.describe(ruleNames: Array<String>) : String {
     return "[${this.stateNumber}] ${ruleNames[this.ruleIndex]} ${this.stateType} ${this.javaClass.simpleName}"
@@ -110,7 +110,7 @@ class CodeCompletionCore(val parser: Parser) {
     private val candidates = CandidatesCollection()
 
     companion object {
-        val followSetsByATN: MutableMap<String, FollowSetsPerState> = HashMap()
+        private val followSetsByATN: MutableMap<String, FollowSetsPerState> = HashMap()
     }
 
     /**
