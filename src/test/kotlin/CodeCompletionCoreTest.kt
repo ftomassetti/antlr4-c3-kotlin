@@ -1,24 +1,12 @@
 import me.tomassetti.antlr4c3.SandyLexer
 import me.tomassetti.antlr4c3.SandyParser
-import org.antlr.v4.runtime.ANTLRInputStream
-import org.antlr.v4.runtime.CommonTokenStream
-import java.io.ByteArrayInputStream
-import java.nio.charset.Charset
 import kotlin.test.assertEquals
 import org.junit.Test as test
-
-
-data class TokenTypeImpl(val type: Int)
 
 class CodeCompletionCoreTest {
 
     fun tokenSuggested(code: String) : Set<TokenTypeImpl> {
-        val lexer = SandyLexer(ANTLRInputStream(ByteArrayInputStream(code.toByteArray(Charset.defaultCharset()))))
-        val parser = SandyParser(CommonTokenStream(lexer))
-        val codeCompletionCode = CodeCompletionCore(parser)
-        //codeCompletionCode.enableDebug()
-        val results = codeCompletionCode.collectCandidates(code.length, null)
-        return results.tokens.keys.map { TokenTypeImpl(it) }.toSet()
+        return tokenSuggested(code, SandyLexer::class.java, SandyParser::class.java)
     }
 
     @test fun emptyFile() {
