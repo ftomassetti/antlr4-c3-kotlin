@@ -3,9 +3,10 @@
 //
 // See LICENSE file for more info.
 
+package me.tomassetti.antlr4c3.api
+
 import me.tomassetti.antlr4c3.SandyLexer
 import me.tomassetti.antlr4c3.SandyParser
-import me.tomassetti.antlr4c3.api.TokenTypeImpl
 import kotlin.test.assertEquals
 import org.junit.Test as test
 
