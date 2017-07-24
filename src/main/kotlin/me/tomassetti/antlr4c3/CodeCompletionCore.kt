@@ -244,26 +244,25 @@ class CodeCompletionCore(val parser: Parser) {
     private fun getFollowingTokens(transition: Transition): TokenList {
         var result = LinkedList<Int>()
 
-        var seen = LinkedList<ATNState>()
         var pipeline: MutableList<ATNState> = LinkedList<ATNState>()
         pipeline.add(transition.target)
 
         while (pipeline.size > 0) {
             var state = pipeline.removeAt(pipeline.size - 1)
 
-            for (transition in state.transitions) {
-                if (transition.serializationType == Transition.ATOM) {
-                    if (!transition.isEpsilon) {
-                        var list = transition.label().toList()
-                        if (list.size == 1 && !this.ignoredTokens.contains(list[0])) {
-                            result.push(list[0]);
-                            pipeline.add(transition.target);
+            state.transitions
+                    .filter { it.serializationType == Transition.ATOM }
+                    .forEach {
+                        if (!it.isEpsilon) {
+                            val list = it.label().toList()
+                            if (list.size == 1 && !this.ignoredTokens.contains(list[0])) {
+                                result.push(list[0]);
+                                pipeline.add(it.target);
+                            }
+                        } else {
+                            pipeline.add(it.target);
                         }
-                    } else {
-                        pipeline.add(transition.target);
                     }
-                }
-            }
         }
 
         return result;
@@ -273,9 +272,9 @@ class CodeCompletionCore(val parser: Parser) {
      * Entry point for the recursive follow set collection function.
      */
     private fun determineFollowSets(start: ATNState, stop: ATNState): MutableList<FollowSetWithPath> {
-        var result: MutableList<FollowSetWithPath> = LinkedList()
-        var seen: MutableSet<ATNState> = HashSet()
-        var ruleStack: MutableList<Int> = LinkedList()
+        val result: MutableList<FollowSetWithPath> = LinkedList()
+        val seen: MutableSet<ATNState> = HashSet()
+        val ruleStack: MutableList<Int> = LinkedList()
         this.collectFollowSets(start, stop, result, seen, ruleStack)
 
         return result
@@ -287,14 +286,15 @@ class CodeCompletionCore(val parser: Parser) {
      */
     private fun collectFollowSets(s: ATNState, stopState: ATNState, followSets: MutableList<FollowSetWithPath>, seen: MutableSet<ATNState>, ruleStack: MutableList<Int>) {
 
-        if (seen.contains(s))
+        if (seen.contains(s)) {
             return
+        }
 
         seen.add(s)
 
         if (s == stopState || s.stateType == ATNState.RULE_STOP) {
-            var set = FollowSetWithPath()
-            set.intervals = IntervalSet.of(Token.EPSILON);
+            val set = FollowSetWithPath()
+            set.intervals = IntervalSet.of(Token.EPSILON)
             set.path = LinkedList(ruleStack)
             followSets.add(set)
             return
@@ -302,9 +302,10 @@ class CodeCompletionCore(val parser: Parser) {
 
         for (transition in s.transitions) {
             if (transition.serializationType == Transition.RULE) {
-                var ruleTransition: RuleTransition = transition as RuleTransition
-                if (ruleStack.indexOf(ruleTransition.target.ruleIndex) != -1)
-                    continue;
+                val ruleTransition: RuleTransition = transition as RuleTransition
+                if (ruleStack.indexOf(ruleTransition.target.ruleIndex) != -1) {
+                    continue
+                }
 
                 ruleStack.add(ruleTransition.target.ruleIndex);
                 this.collectFollowSets(transition.target, stopState, followSets, seen, ruleStack);
@@ -316,7 +317,7 @@ class CodeCompletionCore(val parser: Parser) {
             } else if (transition.isEpsilon) {
                 this.collectFollowSets(transition.target, stopState, followSets, seen, ruleStack);
             } else if (transition.serializationType == Transition.WILDCARD) {
-                var set = FollowSetWithPath()
+                val set = FollowSetWithPath()
                 set.intervals = IntervalSet.of(Token.MIN_USER_TOKEN_TYPE, this.atn.maxTokenType);
                 set.path = LinkedList(ruleStack)
                 followSets.add(set)
@@ -326,7 +327,7 @@ class CodeCompletionCore(val parser: Parser) {
                     if (transition.serializationType == Transition.NOT_SET) {
                         label = label.complement(IntervalSet.of(Token.MIN_USER_TOKEN_TYPE, this.atn.maxTokenType));
                     }
-                    var set = FollowSetWithPath()
+                    val set = FollowSetWithPath()
                     set.intervals = label;
                     set.path = LinkedList(ruleStack)
                     set.following = this.getFollowingTokens(transition)
@@ -342,7 +343,6 @@ class CodeCompletionCore(val parser: Parser) {
      * hit the caret position.
      */
     private fun processRule(startState: ATNState, tokenIndex: Int, callStack: MutableList<Int>, _indentation: String): RuleEndStatus {
-        val ruleName = ruleNames[startState.ruleIndex]
         var indentation : String = _indentation
 
         // Start with rule specific handling before going into the ATN walk.
@@ -379,19 +379,19 @@ class CodeCompletionCore(val parser: Parser) {
         var followSets = setsPerState[startState.stateNumber]
         if (followSets == null) {
             followSets = FollowSetsHolder();
-            setsPerState.set(startState.stateNumber, followSets);
-            val stop = this.atn.ruleToStopState[startState.ruleIndex];
-            followSets.sets = this.determineFollowSets(startState, stop);
+            setsPerState.set(startState.stateNumber, followSets)
+            val stop = this.atn.ruleToStopState[startState.ruleIndex]
+            followSets.sets = this.determineFollowSets(startState, stop)
 
             // Sets are split by path to allow translating them to preferred rules. But for quick hit tests
             // it is also useful to have a set with all symbols combined.
             val combined = IntervalSet()
             for (set in followSets.sets)
-            combined.addAll(set.intervals);
-            followSets.combined = combined;
+            combined.addAll(set.intervals)
+            followSets.combined = combined
         }
 
-        callStack.push(startState.ruleIndex);
+        callStack.push(startState.ruleIndex)
         var currentSymbol = this.tokens[tokenIndex]
 
         if (tokenIndex >= this.tokens.size - 1) { // At caret?
@@ -481,7 +481,7 @@ class CodeCompletionCore(val parser: Parser) {
             myFor@ for (transition in transitions) {
                 when (transition.serializationType) {
                     Transition.RULE -> {
-                        var endStatus = this.processRule(transition.target, currentEntry.tokenIndex, callStack, indentation)
+                        val endStatus = this.processRule(transition.target, currentEntry.tokenIndex, callStack, indentation)
                         for (position in endStatus) {
                            statePipeline.push(PipelineEntry((transition as RuleTransition).followState, position ))
                         }
@@ -496,10 +496,9 @@ class CodeCompletionCore(val parser: Parser) {
                     Transition.WILDCARD -> {
                         if (atCaret) {
                             if (!this.translateToRuleIndex(callStack)) {
-                                for (token in IntervalSet.of(Token.MIN_USER_TOKEN_TYPE, this.atn.maxTokenType).toList())
-                                if (!this.ignoredTokens.contains(token)) {
-                                    this.candidates.tokens[token] = LinkedList()
-                                }
+                                IntervalSet.of(Token.MIN_USER_TOKEN_TYPE, this.atn.maxTokenType).toList()
+                                        .filterNot { this.ignoredTokens.contains(it) }
+                                        .forEach { this.candidates.tokens[it] = LinkedList() }
                             }
                         } else {
                             statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex + 1 ))
@@ -520,8 +519,8 @@ class CodeCompletionCore(val parser: Parser) {
                             }
                             if (atCaret) {
                                 if (!this.translateToRuleIndex(callStack)) {
-                                    var list = set.toList()
-                                    var addFollowing = list.size == 1
+                                    val list = set.toList()
+                                    val addFollowing = list.size == 1
                                     for (symbol in list)
                                     if (!this.ignoredTokens.contains(symbol)) {
                                         if (this.showDebugOutput)
