@@ -70,8 +70,46 @@ private typealias RuleEndStatus = MutableSet<Int>
 
 private data class PipelineEntry(val state: ATNState, val tokenIndex: Int)
 
+interface TokensProvider {
+    fun tokens() : TokenList
+    fun tokensStartIndex() : Int
+    fun startRuleIndex() : Int
+}
+
+class ByStreamTokenProvider(val tokenStream: TokenStream,
+                            val caretTokenIndex: Int,
+                            val context: ParserRuleContext? = null) : TokensProvider {
+    override fun tokensStartIndex() = context?.start?.tokenIndex ?: 0
+
+    override fun tokens(): TokenList {
+        val tokenStartIndex = tokensStartIndex()
+        tokenStream.seek(tokenStartIndex)
+        val tokens = LinkedList<Int>()
+        var offset = 1
+        var exit = false
+        while (!exit) {
+            val token = tokenStream.LT(offset++)
+            tokens.add(token.type)
+            if (token.tokenIndex >= caretTokenIndex || token.type == Token.EOF) {
+                exit = true
+            }
+        }
+        val currentIndex = tokenStream.index()
+        if (currentIndex == -1) {
+            throw RuntimeException("CurrentIndex should be not -1")
+        }
+        tokenStream.seek(currentIndex)
+        return tokens
+    }
+
+    override fun startRuleIndex() = context?.ruleIndex ?: 0
+
+}
+
 // The main class for doing the collection process.
-class CodeCompletionCore(val parser: Parser) {
+class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames: Array<String>,
+                         val languageName : String,
+                         val predicatesEvaluator : Recognizer<*, *>? = null) {
 
     // Debugging options. Print human readable ATN state and other info.
     private var showResult = false                 // Not dependent on showDebugOutput. Prints the collected rules + tokens to terminal.
@@ -92,13 +130,16 @@ class CodeCompletionCore(val parser: Parser) {
     // This allows to return descriptive rules (e.g. className, instead of ID/identifier).
 
     // parser is in the primary constructor
-    private val atn = parser.atn
-    private val vocabulary = parser.vocabulary
-    private val ruleNames = parser.ruleNames
+    //private val atn = parser.atn
+    //private val vocabulary = parser.vocabulary
+    //private val ruleNames = parser.ruleNames
     private var tokens : TokenList = LinkedList()
+    //private var predicatesEvaluator : Recognizer<*, *>? = parser
 
-    private var tokenStartIndex = 0
+    //private var tokenStartIndex = 0
     private var statesProcessed = 0
+
+    private var tokensProvider: TokensProvider? = null
 
     // A mapping of rule index + token stream position to end token positions.
     // A rule which has been visited before with the same input position will always produce the same output positions.
@@ -107,6 +148,12 @@ class CodeCompletionCore(val parser: Parser) {
 
     companion object {
         private val followSetsByATN: MutableMap<String, FollowSetsPerState> = HashMap()
+
+        fun fromParser(parser: Parser) = CodeCompletionCore(parser.atn, parser.vocabulary, parser.ruleNames, parser.javaClass.simpleName, parser)
+    }
+
+    fun collectCandidates(tokenStream: TokenStream, caretTokenIndex: Int, context: ParserRuleContext? = null): CandidatesCollection {
+        return collectCandidates(ByStreamTokenProvider(tokenStream, caretTokenIndex, context))
     }
 
     /**
@@ -115,34 +162,17 @@ class CodeCompletionCore(val parser: Parser) {
      * Optionally you can pass in a parser rule context which limits the ATN walk to only that or called rules. This can significantly
      * speed up the retrieval process but might miss some candidates (if they are outside of the given context).
      */
-    fun collectCandidates(caretTokenIndex: Int, context: ParserRuleContext? = null): CandidatesCollection {
+    fun collectCandidates(tokensProvider: TokensProvider): CandidatesCollection {
+        this.tokensProvider = tokensProvider
         this.shortcutMap.clear()
         this.candidates.rules.clear()
         this.candidates.tokens.clear()
         this.statesProcessed = 0
 
-        this.tokenStartIndex = context?.start?.tokenIndex ?: 0
-        val tokenStream: TokenStream = this.parser.inputStream
-
-        tokenStream.seek(this.tokenStartIndex)
-        this.tokens = LinkedList()
-        var offset = 1
-        var exit = false
-        while (!exit) {
-            val token = tokenStream.LT(offset++)
-            this.tokens.add(token.type)
-            if (token.tokenIndex >= caretTokenIndex || token.type == Token.EOF) {
-                exit = true
-            }
-        }
-        val currentIndex = tokenStream.index()
-        if (currentIndex == -1) {
-            throw RuntimeException("CurrentIndex should be not -1")
-        }
-        tokenStream.seek(currentIndex)
+        this.tokens = tokensProvider.tokens()
 
         val callStack: MutableList<Int> = LinkedList()
-        val startRule = context?.ruleIndex ?: 0
+        val startRule = tokensProvider.startRuleIndex()
         this.processRule(this.atn.ruleToStartState[startRule], 0, callStack, "")
 
         if (this.showResult) {
@@ -181,7 +211,10 @@ class CodeCompletionCore(val parser: Parser) {
      * Check if the predicate associated with the given transition evaluates to true.
      */
     private fun checkPredicate(transition: PredicateTransition): Boolean {
-        return transition.predicate.eval(this.parser, ParserRuleContext.EMPTY)
+        if (this.predicatesEvaluator == null) {
+            throw IllegalStateException("Cannot evaluate predicates because no predicates evaluator was specified")
+        }
+        return transition.predicate.eval(this.predicatesEvaluator, ParserRuleContext.EMPTY)
     }
 
     private val myl = LinkedList<String>()
@@ -238,13 +271,13 @@ class CodeCompletionCore(val parser: Parser) {
      * without intermediate transitions to other rules and only if there is a single symbol for a transition.
      */
     private fun getFollowingTokens(transition: Transition): TokenList {
-        var result = LinkedList<Int>()
+        val result = LinkedList<Int>()
 
-        var pipeline: MutableList<ATNState> = LinkedList<ATNState>()
+        val pipeline: MutableList<ATNState> = LinkedList<ATNState>()
         pipeline.add(transition.target)
 
         while (pipeline.size > 0) {
-            var state = pipeline.removeAt(pipeline.size - 1)
+            val state = pipeline.removeAt(pipeline.size - 1)
 
             state.transitions
                     .filter { it.serializationType == Transition.ATOM }
@@ -366,10 +399,10 @@ class CodeCompletionCore(val parser: Parser) {
         // 3) We get this lookup for free with any 2nd or further visit of the same rule, which often happens
         //    in non trivial grammars, especially with (recursive) expressions and of course when invoking code completion
         //    multiple times.
-        var setsPerState = CodeCompletionCore.followSetsByATN[this.parser.javaClass.simpleName]
+        var setsPerState = CodeCompletionCore.followSetsByATN[languageName]
         if (setsPerState == null) {
             setsPerState = HashMap()
-            CodeCompletionCore.followSetsByATN[this.parser.javaClass.simpleName] = setsPerState
+            CodeCompletionCore.followSetsByATN[languageName] = setsPerState
         }
 
         var followSets = setsPerState[startState.stateNumber]
@@ -600,9 +633,9 @@ class CodeCompletionCore(val parser: Parser) {
         }
 
         if (tokenIndex >= this.tokens.size - 1) {
-            output += "<<${this.tokenStartIndex}$tokenIndex>> "
+            output += "<<${this.tokensProvider!!.tokensStartIndex()}$tokenIndex>> "
         } else {
-            output += "<${this.tokenStartIndex}$tokenIndex> "
+            output += "<${this.tokensProvider!!.tokensStartIndex()}$tokenIndex> "
         }
         println(output + "Current state: " + baseDescription + transitionDescription)
     }

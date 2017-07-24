@@ -19,8 +19,8 @@ fun <L : Lexer, P : Parser> tokenSuggested(code: String, lexerClass: Class<L>, p
 
     var parserConstructor = parserClass.constructors.find { it.parameterCount == 1 && it.parameterTypes[0] == TokenStream::class.java }!!
     val parser = parserConstructor.newInstance(CommonTokenStream(lexer)) as Parser
-    val codeCompletionCode = CodeCompletionCore(parser)
+    val codeCompletionCode = CodeCompletionCore.fromParser(parser)
 
-    val results = codeCompletionCode.collectCandidates(code.length)
+    val results = codeCompletionCode.collectCandidates(parser.tokenStream, code.length)
     return results.tokens.keys.map { TokenTypeImpl(it) }.toSet()
 }
