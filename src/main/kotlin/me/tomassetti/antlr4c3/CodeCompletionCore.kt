@@ -148,22 +148,6 @@ class ByParserClassTokenProvider<L: Lexer, P: Parser>(val lexerClass: Class<L>, 
 typealias RuleKind = Int
 typealias ParserStack = List<RuleKind>
 typealias CompletionOption = Pair<TokenKind, ParserStack>
-/*typealias CompletionOptions = Set<CompletionOption>
-
-fun ATNState.isRuleStart() = this.stateType == ATNState.RULE_START
-
-class ParserStack(val ruleNames: Array<String>,
-                  val states : List<ATNState> = emptyList()) {
-
-    /**
-     * The rules in which I am at the moment
-     */
-    fun rulesStackNames() : List<String> {
-        return rulesStackIndexes().map { ruleNames[it] }
-    }
-
-    fun rulesStackIndexes() = states.filter { it.isRuleStart() }.map { it.ruleIndex }
-}*/
 
 // The main class for doing the collection process.
 class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames: Array<String>,
@@ -238,7 +222,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
 
         val callStack: MutableList<Int> = LinkedList()
         val startRule = tokensProvider.startRuleIndex()
-        this.processRule(this.atn.ruleToStartState[startRule], 0, callStack, "")
+        this.processRule(this.atn.ruleToStartState[startRule], 0, callStack.toMutableList(), "")
 
         if (this.showResult) {
             println("States processed: $statesProcessed")
@@ -259,7 +243,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                 var value: String = this.vocabulary.getDisplayName(key)
                 for (following in value1)
                 value += " " + this.vocabulary.getDisplayName(following)
-                sortedTokens.add(value);
+                sortedTokens.add(value)
             }
 
             println("\n\nCollected tokens:\n")
@@ -431,6 +415,34 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
         }
     }
 
+    private fun setsPerState(): FollowSetsPerState {
+        var setsPerState = CodeCompletionCore.followSetsByATN[languageName]
+        if (setsPerState == null) {
+            setsPerState = HashMap()
+            CodeCompletionCore.followSetsByATN[languageName] = setsPerState
+        }
+        return setsPerState
+    }
+
+    private fun followSets(startState: ATNState): FollowSetsHolder {
+        val setsPerState = setsPerState()
+        var followSets = setsPerState[startState.stateNumber]
+        if (followSets == null) {
+            followSets = FollowSetsHolder()
+            setsPerState[startState.stateNumber] = followSets
+            val stop = this.atn.ruleToStopState[startState.ruleIndex]
+            followSets.sets = this.determineFollowSets(startState, stop)
+
+            // Sets are split by path to allow translating them to preferred rules. But for quick hit tests
+            // it is also useful to have a set with all symbols combined.
+            val combined = IntervalSet()
+            for (set in followSets.sets)
+                combined.addAll(set.intervals)
+            followSets.combined = combined
+        }
+        return followSets
+    }
+
     /**
      * Walks the ATN for a single rule only. It returns the token stream position for each path that could be matched in this rule.
      * The result can be empty in case we hit only non-epsilon transitions that didn't match the current input or if we
@@ -438,6 +450,9 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
      */
     private fun processRule(startState: ATNState, tokenIndex: Int, callStack: MutableList<Int>, _indentation: String): RuleEndStatus {
         var indentation : String = _indentation
+        println("ENTERING WITH CALLSTACK $callStack")
+        val initialCallStack = callStack.toString()
+        val myAlternativeCallStack = LinkedList(callStack)
 
         // Start with rule specific handling before going into the ATN walk.
 
@@ -464,28 +479,10 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
         // 3) We get this lookup for free with any 2nd or further visit of the same rule, which often happens
         //    in non trivial grammars, especially with (recursive) expressions and of course when invoking code completion
         //    multiple times.
-        var setsPerState = CodeCompletionCore.followSetsByATN[languageName]
-        if (setsPerState == null) {
-            setsPerState = HashMap()
-            CodeCompletionCore.followSetsByATN[languageName] = setsPerState
-        }
-
-        var followSets = setsPerState[startState.stateNumber]
-        if (followSets == null) {
-            followSets = FollowSetsHolder();
-            setsPerState.set(startState.stateNumber, followSets)
-            val stop = this.atn.ruleToStopState[startState.ruleIndex]
-            followSets.sets = this.determineFollowSets(startState, stop)
-
-            // Sets are split by path to allow translating them to preferred rules. But for quick hit tests
-            // it is also useful to have a set with all symbols combined.
-            val combined = IntervalSet()
-            for (set in followSets.sets)
-            combined.addAll(set.intervals)
-            followSets.combined = combined
-        }
+        val followSets = followSets(startState)
 
         callStack.push(startState.ruleIndex)
+        println("PUSHED TO CALLSTACK $callStack")
         var currentSymbol = this.tokens[tokenIndex]
 
         if (tokenIndex >= this.tokens.size - 1) { // At caret?
@@ -518,6 +515,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
             }
 
             callStack.pop()
+            println("POPPING FROM CALLSTACK A $callStack")
             return result
 
         } else {
@@ -526,6 +524,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
             // Otherwise stop here.
             if (!followSets.combined!!.contains(Token.EPSILON) && !followSets.combined!!.contains(currentSymbol)) {
                 callStack.pop()
+                println("POPPING FROM CALLSTACK B $callStack")
                 return result
             }
         }
@@ -563,6 +562,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
             when (currentEntry.state.stateType) {
                 ATNState.RULE_START -> { // Happens only for the first state in this rule, not subrules.
                     indentation += "  "
+                    myAlternativeCallStack.add(currentEntry.state.ruleIndex)
                 }
                 ATNState.RULE_STOP -> {
                     // Record the token index we are at, to report it to the caller.
@@ -575,7 +575,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
             myFor@ for (transition in transitions) {
                 when (transition.serializationType) {
                     Transition.RULE -> {
-                        val endStatus = this.processRule(transition.target, currentEntry.tokenIndex, callStack, indentation)
+                        val endStatus = this.processRule(transition.target, currentEntry.tokenIndex, callStack.toMutableList(), indentation)
                         for (position in endStatus) {
                            statePipeline.push(PipelineEntry((transition as RuleTransition).followState, position ))
                         }
@@ -622,6 +622,8 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                                         if (this.showDebugOutput)
                                             println("=====> collected: ${this.vocabulary.getDisplayName(symbol)}")
 
+                                        println("initial call stack $initialCallStack")
+                                        println("alternative call stack $myAlternativeCallStack")
                                         if (addFollowing) {
                                             this.candidates.recordToken(symbol, this.getFollowingTokens(transition), callStack.toList())
                                         } else {
@@ -644,6 +646,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
         }
 
         callStack.pop()
+        println("POPPING FROM CALLSTACK C $callStack")
 
         // Cache the result, for later lookup to avoid duplicate walks.
         positionMap[tokenIndex] = result
