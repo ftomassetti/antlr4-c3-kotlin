@@ -5,6 +5,7 @@
 
 package me.tomassetti.antlr4c3.api
 
+import me.tomassetti.antlr4c3.CandidatesCollection
 import me.tomassetti.antlr4c3.SandyLexer
 import me.tomassetti.antlr4c3.SandyParser
 import kotlin.test.assertEquals
@@ -13,11 +14,15 @@ import org.junit.Test as test
 class CodeCompletionCoreTest {
 
     fun tokenSuggested(code: String) : Set<TokenTypeImpl> {
-        return me.tomassetti.antlr4c3.api.tokenSuggested(code, SandyLexer::class.java, SandyParser::class.java)
+        return me.tomassetti.antlr4c3.api.tokensSuggested(code, SandyLexer::class.java, SandyParser::class.java)
     }
 
     fun tokenSuggestedWSP(code: String) : Set<TokenTypeImpl> {
         return me.tomassetti.antlr4c3.api.tokenSuggestedWithoutSemanticPredicates(code, SandyLexer::class.java, SandyParser::class.java)
+    }
+
+    fun tokenSuggestedWSPWC(code: String) : CandidatesCollection {
+        return me.tomassetti.antlr4c3.api.tokenSuggestedWithoutSemanticPredicatesWithContext(code, SandyLexer::class.java, SandyParser::class.java)
     }
 
     @test fun emptyFile() {
@@ -25,9 +30,23 @@ class CodeCompletionCoreTest {
         assertEquals(setOf(TokenTypeImpl(SandyLexer.VAR), TokenTypeImpl(SandyLexer.ID)), tokenSuggested(code))
     }
 
+    @test fun emptyFileWC() {
+        val code = ""
+        val res = tokenSuggestedWSPWC(code)
+        assertEquals(listOf(SandyParser.RULE_sandyFile), res.tokensContext[SandyLexer.VAR])
+        assertEquals(listOf(0), res.tokensContext[SandyLexer.ID])
+    }
+
     @test fun afterVar() {
         val code = "var"
         assertEquals(setOf(TokenTypeImpl(SandyLexer.ID)), tokenSuggested(code))
+    }
+
+    @test fun afterVarWC() {
+        val code = "var"
+        val res = tokenSuggestedWSPWC(code)
+        assertEquals(listOf(SandyParser.RULE_sandyFile, SandyParser.RULE_line, SandyParser.RULE_statement, SandyParser.RULE_varDeclaration, SandyParser.RULE_assignment),
+                res.tokensContext[SandyLexer.ID])
     }
 
     @test fun afterEquals() {
@@ -54,6 +73,26 @@ class CodeCompletionCoreTest {
         assertEquals(setOf(TokenTypeImpl(SandyLexer.RPAREN), TokenTypeImpl(SandyLexer.PLUS), TokenTypeImpl(SandyLexer.MINUS),
                 TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
                 tokenSuggested(code))
+    }
+
+    @test fun incompleteParenthesisWC() {
+        val code = "var a = (1"
+        val res = tokenSuggestedWSPWC(code)
+        assertEquals(listOf(SandyParser.RULE_sandyFile, SandyParser.RULE_line, SandyParser.RULE_statement, SandyParser.RULE_varDeclaration, SandyParser.RULE_assignment,
+                SandyParser.RULE_expression),
+                res.tokensContext[SandyLexer.RPAREN])
+        assertEquals(listOf(SandyParser.RULE_sandyFile, SandyParser.RULE_line, SandyParser.RULE_statement, SandyParser.RULE_varDeclaration, SandyParser.RULE_assignment,
+                SandyParser.RULE_expression, SandyParser.RULE_expression),
+                res.tokensContext[SandyLexer.PLUS])
+        assertEquals(listOf(SandyParser.RULE_sandyFile, SandyParser.RULE_line, SandyParser.RULE_statement, SandyParser.RULE_varDeclaration, SandyParser.RULE_assignment,
+                SandyParser.RULE_expression, SandyParser.RULE_expression),
+                res.tokensContext[SandyLexer.MINUS])
+        assertEquals(listOf(SandyParser.RULE_sandyFile, SandyParser.RULE_line, SandyParser.RULE_statement, SandyParser.RULE_varDeclaration, SandyParser.RULE_assignment,
+                SandyParser.RULE_expression, SandyParser.RULE_expression),
+                res.tokensContext[SandyLexer.DIVISION])
+        assertEquals(listOf(SandyParser.RULE_sandyFile, SandyParser.RULE_line, SandyParser.RULE_statement, SandyParser.RULE_varDeclaration, SandyParser.RULE_assignment,
+                SandyParser.RULE_expression, SandyParser.RULE_expression),
+                res.tokensContext[SandyLexer.ASTERISK])
     }
 
     @test fun incompleteComplexParenthesis() {

@@ -28,9 +28,21 @@ class CandidatesCollection {
     // The list represents the call stack at which the given rule was found during evaluation
     // This allows to determine a context for rules that are used in different places
     var rules: MutableMap<Int, RuleList> = HashMap()
+    var tokensContext = HashMap<TokenKind, ParserStack>()
+
+    fun recordToken(tokenKind: TokenKind, followers: TokenList, parserStack: ParserStack) {
+        tokens[tokenKind] = followers
+        tokensContext[tokenKind] = parserStack
+    }
 
     override fun toString(): String {
-        return "CandidatesCollection(tokens=$tokens, rules=$rules)"
+        return "CandidatesCollection(tokens=$tokens, rules=$rules, tokensContext=${tokensContext})"
+    }
+
+    fun clear() {
+        this.rules.clear()
+        this.tokens.clear()
+        this.tokensContext.clear()
     }
 
 }
@@ -133,6 +145,26 @@ class ByParserClassTokenProvider<L: Lexer, P: Parser>(val lexerClass: Class<L>, 
 
 }
 
+typealias RuleKind = Int
+typealias ParserStack = List<RuleKind>
+typealias CompletionOption = Pair<TokenKind, ParserStack>
+/*typealias CompletionOptions = Set<CompletionOption>
+
+fun ATNState.isRuleStart() = this.stateType == ATNState.RULE_START
+
+class ParserStack(val ruleNames: Array<String>,
+                  val states : List<ATNState> = emptyList()) {
+
+    /**
+     * The rules in which I am at the moment
+     */
+    fun rulesStackNames() : List<String> {
+        return rulesStackIndexes().map { ruleNames[it] }
+    }
+
+    fun rulesStackIndexes() = states.filter { it.isRuleStart() }.map { it.ruleIndex }
+}*/
+
 // The main class for doing the collection process.
 class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames: Array<String>,
                          val languageName : String,
@@ -199,8 +231,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
     fun collectCandidates(tokensProvider: TokensProvider): CandidatesCollection {
         this.tokensProvider = tokensProvider
         this.shortcutMap.clear()
-        this.candidates.rules.clear()
-        this.candidates.tokens.clear()
+        this.candidates.clear()
         this.statesProcessed = 0
 
         this.tokens = tokensProvider.tokens()
@@ -424,7 +455,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
             }
         }
 
-        var result: RuleEndStatus = HashSet()
+        val result: RuleEndStatus = HashSet()
 
         // For rule start states we determine and cache the follow set, which gives us 3 advantages:
         // 1) We can quickly check if a symbol would be matched when we follow that rule. We can so check in advance
@@ -474,11 +505,11 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                                 println("=====> collected: ${this.vocabulary.getDisplayName(symbol)}")
                             }
                             if (!this.candidates.tokens.contains(symbol)) {
-                                this.candidates.tokens[symbol] = set.following; // Following is empty if there is more than one entry in the set.
+                                this.candidates.recordToken(symbol, set.following, callStack.toList()) // Following is empty if there is more than one entry in the set.
                             } else {
                                 // More than one following list for the same symbol.
                                 if (this.candidates.tokens[symbol] != set.following) {
-                                    this.candidates.tokens[symbol] = LinkedList()
+                                    this.candidates.recordToken(symbol, LinkedList(), callStack.toList())
                                 }
                             }
                         }
@@ -561,7 +592,9 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                             if (!this.translateToRuleIndex(callStack)) {
                                 IntervalSet.of(Token.MIN_USER_TOKEN_TYPE, this.atn.maxTokenType).toList()
                                         .filterNot { this.ignoredTokens.contains(it) }
-                                        .forEach { this.candidates.tokens[it] = LinkedList() }
+                                        .forEach {
+                                            this.candidates.recordToken(it, LinkedList(), callStack.toList())
+                                        }
                             }
                         } else {
                             statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex + 1 ))
@@ -590,9 +623,9 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                                             println("=====> collected: ${this.vocabulary.getDisplayName(symbol)}")
 
                                         if (addFollowing) {
-                                            this.candidates.tokens[symbol] = this.getFollowingTokens(transition)
+                                            this.candidates.recordToken(symbol, this.getFollowingTokens(transition), callStack.toList())
                                         } else {
-                                            this.candidates.tokens[symbol] = LinkedList()
+                                            this.candidates.recordToken(symbol, LinkedList(), callStack.toList())
                                         }
                                     }
                                 }
