@@ -21,9 +21,11 @@ typealias RuleList = MutableList<RuleIndex>
 // All the candidates which have been found. Tokens and rules are separated (both use a numeric value).
 // Token entries include a list of tokens that directly follow them (see also the "following" member in the FollowSetWithPath class).
 class CandidatesCollection {
+
     // The map keys are the lexer tokens
     // The list consists of further token ids which directly follow the given token in the grammar (if any)
     var tokens: MutableMap<Int, TokenList> = HashMap()
+
     // The map keys are the rule indices
     // The list represents the call stack at which the given rule was found during evaluation
     // This allows to determine a context for rules that are used in different places
@@ -36,7 +38,7 @@ class CandidatesCollection {
     }
 
     override fun toString(): String {
-        return "CandidatesCollection(tokens=$tokens, rules=$rules, tokensContext=${tokensContext})"
+        return "CandidatesCollection(tokens=$tokens, rules=$rules, tokensContext=$tokensContext)"
     }
 
     fun clear() {
@@ -107,7 +109,11 @@ private typealias FollowSetsPerState = MutableMap<Int, FollowSetsHolder>
 // Token stream position info after a rule was processed.
 private typealias RuleEndStatus = MutableSet<Int>
 
-private data class PipelineEntry(val state: ATNState, val tokenIndex: Int, val callStack: MutableList<Int>)
+private data class PipelineEntry(val state: ATNState, val tokenIndex: Int, val callStack: MutableList<Int>, val transitions: List<Transition> = emptyList()) {
+    fun  updatedCallStack(): ParserStack {
+        return this.callStack.toList() + transitions.filter { it.target.stateType == ATNState.RULE_START }.map { it.target.ruleIndex }
+    }
+}
 
 interface TokensProvider {
     fun tokens() : TokenList
@@ -198,7 +204,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
     // This allows to return descriptive rules (e.g. className, instead of ID/identifier).
 
     private var tokens : TokenList = LinkedList()
-    private var statesProcessed = 0
+    private var statesProcessed = 0 // Used only for debugging
     private var tokensProvider: TokensProvider? = null
 
     // A mapping of rule index + token stream position to end token positions.
@@ -437,13 +443,24 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
         return followSets
     }
 
+    private data class PathDescription(val initialState: ATNState, val transitions: List<ATNState> = emptyList()) {
+        fun follow(transition: Transition): CodeCompletionCore.PathDescription {
+            return PathDescription(initialState, transitions + listOf(transition.target))
+        }
+
+        fun  followState(state: ATNState): CodeCompletionCore.PathDescription {
+            return PathDescription(initialState, transitions + listOf(state))
+        }
+    }
+
     /**
      * Walks the ATN for a single rule only. It returns the token stream position for each path that could be matched in this rule.
      * The result can be empty in case we hit only non-epsilon transitions that didn't match the current input or if we
      * hit the caret position.
      */
-    private fun processRule(startState: ATNState, tokenIndex: Int, callStack: MutableList<Int>, _indentation: String) : RuleEndStatus {
-        println("PROCESSRULE state=${startState} tokenIndex=$tokenIndex callStack=$callStack")
+    private fun processRule(startState: ATNState, tokenIndex: Int, callStack: MutableList<Int>, _indentation: String,
+                            pathDescription: PathDescription = PathDescription(startState)) : RuleEndStatus {
+        //println("PROCESSRULE state=${startState} tokenIndex=$tokenIndex callStack=$callStack")
         var indentation : String = _indentation
         // Start with rule specific handling before going into the ATN walk.
 
@@ -529,7 +546,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
         statePipeline.push(PipelineEntry(startState, tokenIndex, callStack.toMutableList()))
 
         val processed = LinkedList<PipelineEntry>()
-        pipelineLoop@ while (statePipeline.size > 0) {
+        pipelineLoop@ while (statePipeline.isNotEmpty()) {
             if (statePipeline.size > 1000) {
                 throw RuntimeException("State pipeline way too big")
             }
@@ -552,6 +569,10 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                 }
             }
 
+            //println("  Processing Pipeline Entry ${currentEntry.state} ${currentEntry.state.stateType} ${currentEntry.state.describe(ruleNames)} ${currentEntry.transitions}")
+
+            val myPathDescription = if (currentEntry.state.stateType == ATNState.RULE_START) pathDescription.followState(currentEntry.state) else pathDescription
+
             when (currentEntry.state.stateType) {
                 ATNState.RULE_START -> { // Happens only for the first state in this rule, not subrules.
                     indentation += "  "
@@ -565,18 +586,21 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
 
             val transitions = currentEntry.state.transitions
             myFor@ for (transition in transitions) {
-                println("transition ${transition.serializationType}")
+                //println("    transition ${transition.serializationType}")
                 when (transition.serializationType) {
                     Transition.RULE -> {
-                        val endStatus = this.processRule(transition.target, currentEntry.tokenIndex, currentEntry.callStack.toMutableList(), indentation)
+                        val endStatus = this.processRule(transition.target, currentEntry.tokenIndex, currentEntry.callStack.toMutableList(), indentation,
+                                myPathDescription.follow(transition))
                         for (position in endStatus) {
-                           statePipeline.push(PipelineEntry((transition as RuleTransition).followState, position, currentEntry.callStack.toMutableList() ))
+                           statePipeline.push(PipelineEntry((transition as RuleTransition).followState, position, currentEntry.callStack.toMutableList(),
+                                   currentEntry.transitions + listOf(transition)))
                         }
                     }
 
                     Transition.PREDICATE -> {
                         if (this.checkPredicate(transition as PredicateTransition)) {
-                            statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex, currentEntry.callStack.toMutableList() ))
+                            statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex, currentEntry.callStack.toMutableList(),
+                                    currentEntry.transitions + listOf(transition)))
                         }
                     }
 
@@ -586,18 +610,18 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                                 IntervalSet.of(Token.MIN_USER_TOKEN_TYPE, this.atn.maxTokenType).toList()
                                         .filterNot { this.ignoredTokens.contains(it) }
                                         .forEach {
-                                            this.candidates.recordToken(it, LinkedList(), callStack.toMutableList())
+                                            this.candidates.recordToken(it, LinkedList(), currentEntry!!.updatedCallStack())
                                         }
                             }
                         } else {
-                            statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex + 1, currentEntry.callStack.toMutableList() ))
+                            statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex + 1, currentEntry.callStack.toMutableList(), currentEntry.transitions + listOf(transition) ))
                         }
                     }
 
                     else -> {
                         if (transition.isEpsilon) {
                             // Jump over simple states with a single outgoing epsilon transition.
-                            statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex, currentEntry.callStack.toMutableList()))
+                            statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex, currentEntry.callStack.toMutableList(), currentEntry.transitions + listOf(transition)))
                             continue@myFor
                         }
 
@@ -606,20 +630,21 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                             if (transition.serializationType == Transition.NOT_SET) {
                                 set = set.complement(IntervalSet.of(Token.MIN_USER_TOKEN_TYPE, this.atn.maxTokenType))
                             }
-                            println("transition atCaret? $atCaret tokenIndex ${currentEntry!!.tokenIndex} tokens ${tokens}")
+                            println("    transition atCaret? $atCaret tokenIndex ${currentEntry!!.tokenIndex} tokens ${tokens}")
                             if (atCaret) {
                                 if (!this.translateToRuleIndex(currentEntry.callStack)) {
                                     val list = set.toList()
                                     val addFollowing = list.size == 1
-                                    for (symbol in list)
-                                    if (!this.ignoredTokens.contains(symbol)) {
-                                        if (this.showDebugOutput)
-                                            println("=====> collected: ${this.vocabulary.getDisplayName(symbol)}")
+                                    for (symbol in list) {
+                                        if (!this.ignoredTokens.contains(symbol)) {
+                                            if (this.showDebugOutput)
+                                                println("=====> collected: ${this.vocabulary.getDisplayName(symbol)}")
 
-                                        if (addFollowing) {
-                                            this.candidates.recordToken(symbol, this.getFollowingTokens(transition), currentEntry.callStack.toMutableList())
-                                        } else {
-                                            this.candidates.recordToken(symbol, LinkedList(), currentEntry.callStack.toMutableList())
+                                            if (addFollowing) {
+                                                this.candidates.recordToken(symbol, this.getFollowingTokens(transition), currentEntry.updatedCallStack())
+                                            } else {
+                                                this.candidates.recordToken(symbol, LinkedList(), currentEntry.updatedCallStack())
+                                            }
                                         }
                                     }
                                 }
@@ -628,7 +653,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                                     if (this.showDebugOutput) {
                                         println("=====> consumed: ${this.vocabulary.getDisplayName(currentSymbol)}")
                                     }
-                                    statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex + 1, currentEntry.callStack.toMutableList() ))
+                                    statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex + 1, currentEntry.callStack.toMutableList(), currentEntry.transitions + listOf(transition) ))
                                 }
                             }
                         }

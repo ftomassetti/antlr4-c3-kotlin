@@ -32,7 +32,6 @@ fun <L : Lexer, P : Parser> tokensSuggested(code: String, lexerClass: Class<L>, 
 
 fun <L : Lexer, P : Parser> tokenSuggestedWithoutSemanticPredicatesWithContext(code: String, lexerClass: Class<L>, parserClass: Class<P>) : CandidatesCollection {
     val codeCompletionCode = CodeCompletionCore.fromParserClass(parserClass)
-    codeCompletionCode.enableDebug()
 
     return codeCompletionCode.collectCandidates(ByParserClassTokenProvider(lexerClass, parserClass, code))
 }
