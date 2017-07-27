@@ -5,6 +5,7 @@
 
 package me.tomassetti.antlr4c3
 
+import me.tomassetti.antlr4c3.api.TokenTypeImpl
 import org.antlr.v4.runtime.*
 import org.antlr.v4.runtime.atn.*
 import org.antlr.v4.runtime.misc.IntervalSet
@@ -119,6 +120,18 @@ interface TokensProvider {
     fun tokens() : TokenList
     fun tokensStartIndex() : Int
     fun startRuleIndex() : Int
+}
+
+class ByListTokenProvider(val tokens: List<TokenTypeImpl>,
+                            val context: ParserRuleContext? = null) : TokensProvider {
+    override fun tokensStartIndex() = context?.start?.tokenIndex ?: 0
+
+    override fun tokens(): TokenList {
+        return tokens.map { it.type }.toMutableList()
+    }
+
+    override fun startRuleIndex() = context?.ruleIndex ?: 0
+
 }
 
 class ByStreamTokenProvider(val tokenStream: TokenStream,
@@ -630,7 +643,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                             if (transition.serializationType == Transition.NOT_SET) {
                                 set = set.complement(IntervalSet.of(Token.MIN_USER_TOKEN_TYPE, this.atn.maxTokenType))
                             }
-                            println("    transition atCaret? $atCaret tokenIndex ${currentEntry!!.tokenIndex} tokens ${tokens}")
+                            //println("    transition atCaret? $atCaret tokenIndex ${currentEntry!!.tokenIndex} tokens ${tokens}")
                             if (atCaret) {
                                 if (!this.translateToRuleIndex(currentEntry.callStack)) {
                                     val list = set.toList()

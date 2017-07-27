@@ -5,10 +5,12 @@
 
 package me.tomassetti.antlr4c3.api
 
+import me.tomassetti.antlr4c3.ByListTokenProvider
 import me.tomassetti.antlr4c3.ByParserClassTokenProvider
 import me.tomassetti.antlr4c3.CandidatesCollection
 import me.tomassetti.antlr4c3.CodeCompletionCore
 import org.antlr.v4.runtime.*
+import org.antlr.v4.runtime.atn.ATN
 import java.io.ByteArrayInputStream
 import java.nio.charset.Charset
 
@@ -34,6 +36,13 @@ fun <L : Lexer, P : Parser> tokenSuggestedWithoutSemanticPredicatesWithContext(c
     val codeCompletionCode = CodeCompletionCore.fromParserClass(parserClass)
 
     return codeCompletionCode.collectCandidates(ByParserClassTokenProvider(lexerClass, parserClass, code))
+}
+
+fun tokenSuggestedWithoutSemanticPredicatesWithContext(tokens: List<TokenTypeImpl>, atn: ATN, vocabulary: Vocabulary, ruleNames: Array<String>,
+                                                       languageName : String) : CandidatesCollection {
+    val codeCompletionCode = CodeCompletionCore(atn, vocabulary, ruleNames, languageName)
+
+    return codeCompletionCode.collectCandidates(ByListTokenProvider(tokens))
 }
 
 fun <L : Lexer, P : Parser> tokenSuggestedWithoutSemanticPredicates(code: String, lexerClass: Class<L>, parserClass: Class<P>) : Set<TokenTypeImpl> {
