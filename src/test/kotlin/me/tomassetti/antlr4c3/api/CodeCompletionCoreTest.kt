@@ -21,6 +21,10 @@ class CodeCompletionCoreTest {
         return me.tomassetti.antlr4c3.api.tokenSuggestedWithoutSemanticPredicates(code, SandyLexer::class.java, SandyParser::class.java)
     }
 
+    fun tokenSuggestedWC(code: String) : CandidatesCollection {
+        return me.tomassetti.antlr4c3.api.tokensSuggestedWithContext(code, SandyLexer::class.java, SandyParser::class.java)
+    }
+
     fun tokenSuggestedWSPWC(code: String) : CandidatesCollection {
         return me.tomassetti.antlr4c3.api.tokenSuggestedWithoutSemanticPredicatesWithContext(code, SandyLexer::class.java, SandyParser::class.java)
     }
