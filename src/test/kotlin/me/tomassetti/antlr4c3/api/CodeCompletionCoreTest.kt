@@ -87,7 +87,7 @@ class CodeCompletionCoreTest {
         val code = "var a = (1"
         val res = tokenSuggestedWSPWC(code)
         assertEquals(listOf(SandyParser.RULE_sandyFile, RULE_line, RULE_statement, RULE_varDeclaration, RULE_assignment,
-                RULE_expression),
+                RULE_expression, RULE_expression),
                 res.tokensContext[RPAREN])
         assertEquals(listOf(SandyParser.RULE_sandyFile, RULE_line, RULE_statement, RULE_varDeclaration, RULE_assignment,
                 RULE_expression, RULE_expression),
