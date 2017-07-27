@@ -197,16 +197,8 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
     private val preferredRules = HashSet<Int>()       // Rules which replace any candidate token they contain.
     // This allows to return descriptive rules (e.g. className, instead of ID/identifier).
 
-    // parser is in the primary constructor
-    //private val atn = parser.atn
-    //private val vocabulary = parser.vocabulary
-    //private val ruleNames = parser.ruleNames
     private var tokens : TokenList = LinkedList()
-    //private var predicatesEvaluator : Recognizer<*, *>? = parser
-
-    //private var tokenStartIndex = 0
     private var statesProcessed = 0
-
     private var tokensProvider: TokensProvider? = null
 
     // A mapping of rule index + token stream position to end token positions.
@@ -247,7 +239,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
 
         val callStack: MutableList<Int> = LinkedList()
         val startRule = tokensProvider.startRuleIndex()
-        this.processRule(this.atn.ruleToStartState[startRule], 0, callStack.toMutableList(), "", emptyList())
+        this.processRule(this.atn.ruleToStartState[startRule], 0, callStack.toMutableList(), "")
 
         if (this.showResult) {
             println("States processed: $statesProcessed")
@@ -437,8 +429,9 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
             // Sets are split by path to allow translating them to preferred rules. But for quick hit tests
             // it is also useful to have a set with all symbols combined.
             val combined = IntervalSet()
-            for (set in followSets.sets)
+            for (set in followSets.sets) {
                 combined.addAll(set.intervals)
+            }
             followSets.combined = combined
         }
         return followSets
@@ -449,10 +442,9 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
      * The result can be empty in case we hit only non-epsilon transitions that didn't match the current input or if we
      * hit the caret position.
      */
-    private fun processRule(startState: ATNState, tokenIndex: Int, callStack: MutableList<Int>, _indentation: String, stackAfterLastToken: ParserStack): RuleEndStatus {
+    private fun processRule(startState: ATNState, tokenIndex: Int, callStack: MutableList<Int>, _indentation: String) : RuleEndStatus {
+        println("PROCESSRULE state=${startState} tokenIndex=$tokenIndex callStack=$callStack")
         var indentation : String = _indentation
-        var stackAfterLastTokenMod = stackAfterLastToken
-        //println("ENTERING WITH CALLSTACK $callStack")
         // Start with rule specific handling before going into the ATN walk.
 
         // Check first if we've taken this path with the same input before.
@@ -481,7 +473,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
         val followSets = followSets(startState)
 
         callStack.push(startState.ruleIndex)
-        //println("PUSHED TO CALLSTACK $callStack")
+
         var currentSymbol = this.tokens[tokenIndex]
 
         if (tokenIndex >= this.tokens.size - 1) { // At caret?
@@ -501,11 +493,11 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                                 println("=====> collected: ${this.vocabulary.getDisplayName(symbol)}")
                             }
                             if (!this.candidates.tokens.contains(symbol)) {
-                                this.candidates.recordToken(symbol, set.following, stackAfterLastTokenMod) // Following is empty if there is more than one entry in the set.
+                                this.candidates.recordToken(symbol, set.following, callStack.toMutableList()) // Following is empty if there is more than one entry in the set.
                             } else {
                                 // More than one following list for the same symbol.
                                 if (this.candidates.tokens[symbol] != set.following) {
-                                    this.candidates.recordToken(symbol, LinkedList(), stackAfterLastTokenMod)
+                                    this.candidates.recordToken(symbol, LinkedList(), callStack.toMutableList())
                                 }
                             }
                         }
@@ -542,7 +534,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                 throw RuntimeException("State pipeline way too big")
             }
             currentEntry = statePipeline.pop()
-            println("ZZ1 ${currentEntry.callStack}")
+
             if (processed.contains(currentEntry)) {
                 continue
             } else {
@@ -554,7 +546,6 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
 
             val atCaret = currentEntry!!.tokenIndex >= this.tokens.size - 1
             if (this.showDebugOutput) {
-                println("ZZ5 ${currentEntry.callStack}")
                 this.printDescription(indentation, currentEntry.state, this.generateBaseDescription(currentEntry.state), currentEntry.tokenIndex)
                 if (this.showRuleStack) {
                     this.printRuleState(currentEntry.callStack)
@@ -572,13 +563,12 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                 }
             }
 
-            println("ZZ10 ${currentEntry.callStack}")
             val transitions = currentEntry.state.transitions
             myFor@ for (transition in transitions) {
                 println("transition ${transition.serializationType}")
                 when (transition.serializationType) {
                     Transition.RULE -> {
-                        val endStatus = this.processRule(transition.target, currentEntry.tokenIndex, currentEntry.callStack.toMutableList(), indentation, stackAfterLastTokenMod)
+                        val endStatus = this.processRule(transition.target, currentEntry.tokenIndex, currentEntry.callStack.toMutableList(), indentation)
                         for (position in endStatus) {
                            statePipeline.push(PipelineEntry((transition as RuleTransition).followState, position, currentEntry.callStack.toMutableList() ))
                         }
@@ -596,7 +586,7 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                                 IntervalSet.of(Token.MIN_USER_TOKEN_TYPE, this.atn.maxTokenType).toList()
                                         .filterNot { this.ignoredTokens.contains(it) }
                                         .forEach {
-                                            this.candidates.recordToken(it, LinkedList(), stackAfterLastTokenMod)
+                                            this.candidates.recordToken(it, LinkedList(), callStack.toMutableList())
                                         }
                             }
                         } else {
@@ -627,9 +617,9 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                                             println("=====> collected: ${this.vocabulary.getDisplayName(symbol)}")
 
                                         if (addFollowing) {
-                                            this.candidates.recordToken(symbol, this.getFollowingTokens(transition), stackAfterLastTokenMod)
+                                            this.candidates.recordToken(symbol, this.getFollowingTokens(transition), currentEntry.callStack.toMutableList())
                                         } else {
-                                            this.candidates.recordToken(symbol, LinkedList(), stackAfterLastTokenMod)
+                                            this.candidates.recordToken(symbol, LinkedList(), currentEntry.callStack.toMutableList())
                                         }
                                     }
                                 }
@@ -637,8 +627,6 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                                 if (set.contains(currentSymbol)) {
                                     if (this.showDebugOutput) {
                                         println("=====> consumed: ${this.vocabulary.getDisplayName(currentSymbol)}")
-                                        print("HAVING $callStack")
-                                        stackAfterLastTokenMod = callStack
                                     }
                                     statePipeline.push(PipelineEntry(transition.target, currentEntry.tokenIndex + 1, currentEntry.callStack.toMutableList() ))
                                 }
@@ -650,7 +638,6 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
         }
 
         callStack.pop()
-        //println("POPPING FROM CALLSTACK C $callStack")
 
         // Cache the result, for later lookup to avoid duplicate walks.
         positionMap[tokenIndex] = result
