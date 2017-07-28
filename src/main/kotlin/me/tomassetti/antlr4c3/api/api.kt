@@ -5,18 +5,13 @@
 
 package me.tomassetti.antlr4c3.api
 
-import me.tomassetti.antlr4c3.ByListTokenProvider
-import me.tomassetti.antlr4c3.ByParserClassTokenProvider
-import me.tomassetti.antlr4c3.CandidatesCollection
-import me.tomassetti.antlr4c3.CodeCompletionCore
+import me.tomassetti.antlr4c3.*
 import org.antlr.v4.runtime.*
 import org.antlr.v4.runtime.atn.ATN
 import java.io.ByteArrayInputStream
 import java.nio.charset.Charset
 
-data class TokenTypeImpl(val type: Int)
-
-fun <L : Lexer, P : Parser> tokensSuggestedWithContext(code: String, lexerClass: Class<L>, parserClass: Class<P>) : CandidatesCollection {
+fun <L : Lexer, P : Parser> completionsWithContext(code: String, lexerClass: Class<L>, parserClass: Class<P>) : CandidatesCollection {
     val lexerConstructor = lexerClass.constructors.find { it.parameterCount == 1 && it.parameterTypes[0] == CharStream::class.java }!!
     val charStream = ANTLRInputStream(ByteArrayInputStream(code.toByteArray(Charset.defaultCharset())))
     val lexer = lexerConstructor.newInstance(charStream) as Lexer
@@ -28,23 +23,23 @@ fun <L : Lexer, P : Parser> tokensSuggestedWithContext(code: String, lexerClass:
     return codeCompletionCode.collectCandidates(parser.tokenStream, code.length)
 }
 
-fun <L : Lexer, P : Parser> tokensSuggested(code: String, lexerClass: Class<L>, parserClass: Class<P>) : Set<TokenTypeImpl> {
-    return tokensSuggestedWithContext(code, lexerClass, parserClass).tokens.keys.map { TokenTypeImpl(it) }.toSet()
+fun <L : Lexer, P : Parser> completions(code: String, lexerClass: Class<L>, parserClass: Class<P>) : Set<TokenKind> {
+    return completionsWithContext(code, lexerClass, parserClass).tokens.keys.toSet()
 }
 
-fun <L : Lexer, P : Parser> tokenSuggestedWithoutSemanticPredicatesWithContext(code: String, lexerClass: Class<L>, parserClass: Class<P>) : CandidatesCollection {
+fun <L : Lexer, P : Parser> completionsWithContextIgnoringSemanticPredicates(code: String, lexerClass: Class<L>, parserClass: Class<P>) : CandidatesCollection {
     val codeCompletionCode = CodeCompletionCore.fromParserClass(parserClass)
 
     return codeCompletionCode.collectCandidates(ByParserClassTokenProvider(lexerClass, parserClass, code))
 }
 
-fun tokenSuggestedWithoutSemanticPredicatesWithContext(tokens: List<TokenTypeImpl>, atn: ATN, vocabulary: Vocabulary, ruleNames: Array<String>,
-                                                       languageName : String) : CandidatesCollection {
+fun completionsWithContextIgnoringSemanticPredicates(tokens: List<TokenKind>, atn: ATN, vocabulary: Vocabulary, ruleNames: Array<String>,
+                                                     languageName : String) : CandidatesCollection {
     val codeCompletionCode = CodeCompletionCore(atn, vocabulary, ruleNames, languageName)
 
     return codeCompletionCode.collectCandidates(ByListTokenProvider(tokens))
 }
 
-fun <L : Lexer, P : Parser> tokenSuggestedWithoutSemanticPredicates(code: String, lexerClass: Class<L>, parserClass: Class<P>) : Set<TokenTypeImpl> {
-    return tokenSuggestedWithoutSemanticPredicatesWithContext(code, lexerClass, parserClass).tokens.keys.map { TokenTypeImpl(it) }.toSet()
+fun <L : Lexer, P : Parser> completionsIgnoringSemanticPredicates(code: String, lexerClass: Class<L>, parserClass: Class<P>) : Set<TokenKind> {
+    return completionsWithContextIgnoringSemanticPredicates(code, lexerClass, parserClass).tokens.keys
 }

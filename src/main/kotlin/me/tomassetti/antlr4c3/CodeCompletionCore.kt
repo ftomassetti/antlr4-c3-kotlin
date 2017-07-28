@@ -5,7 +5,6 @@
 
 package me.tomassetti.antlr4c3
 
-import me.tomassetti.antlr4c3.api.TokenTypeImpl
 import org.antlr.v4.runtime.*
 import org.antlr.v4.runtime.atn.*
 import org.antlr.v4.runtime.misc.IntervalSet
@@ -122,12 +121,12 @@ interface TokensProvider {
     fun startRuleIndex() : Int
 }
 
-class ByListTokenProvider(val tokens: List<TokenTypeImpl>,
+class ByListTokenProvider(val tokens: List<TokenKind>,
                             val context: ParserRuleContext? = null) : TokensProvider {
     override fun tokensStartIndex() = context?.start?.tokenIndex ?: 0
 
     override fun tokens(): TokenList {
-        return tokens.map { it.type }.toMutableList()
+        return tokens.toMutableList()
     }
 
     override fun startRuleIndex() = context?.ruleIndex ?: 0
