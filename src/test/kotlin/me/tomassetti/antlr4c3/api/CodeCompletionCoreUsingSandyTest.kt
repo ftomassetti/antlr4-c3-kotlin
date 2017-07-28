@@ -5,17 +5,15 @@
 
 package me.tomassetti.antlr4c3.api
 
-import me.tomassetti.antlr4c3.CandidatesCollection
-import me.tomassetti.antlr4c3.SandyLexer
+import me.tomassetti.antlr4c3.*
 import me.tomassetti.antlr4c3.SandyLexer.MINUS
 import me.tomassetti.antlr4c3.SandyLexer.RPAREN
 import me.tomassetti.antlr4c3.SandyLexer.*
-import me.tomassetti.antlr4c3.SandyParser
 import me.tomassetti.antlr4c3.SandyParser.*
 import kotlin.test.assertEquals
 import org.junit.Test as test
 
-class CodeCompletionCoreTest {
+class CodeCompletionCoreUsingSandyTest {
 
     fun tokenSuggested(code: String) : Set<TokenTypeImpl> {
         return me.tomassetti.antlr4c3.api.tokensSuggested(code, SandyLexer::class.java, SandyParser::class.java)
@@ -210,4 +208,25 @@ class CodeCompletionCoreTest {
                 TokenTypeImpl(SandyLexer.DIVISION), TokenTypeImpl(SandyLexer.ASTERISK)),
                 tokenSuggestedWSP(code))
     }
+}
+
+class CodeCompletionCoreUsingStaMacTest {
+
+    fun tokenSuggestedWC(code: String) : CandidatesCollection {
+        return me.tomassetti.antlr4c3.api.tokensSuggestedWithContext(code, StaMacLexer::class.java, StaMacParser::class.java)
+    }
+
+    fun tokenSuggestedWSPWC(code: String) : CandidatesCollection {
+        return me.tomassetti.antlr4c3.api.tokenSuggestedWithoutSemanticPredicatesWithContext(code, StaMacLexer::class.java, StaMacParser::class.java)
+    }
+
+    @test fun emptyFileWC() {
+        val code = ""
+        val completion = tokenSuggestedWSPWC(code)
+        assertEquals(setOf(StaMacLexer.SM), completion.tokens.keys)
+        assertEquals(listOf(StaMacParser.RULE_stateMachine, StaMacParser.RULE_preamble),
+                completion.tokensContext[StaMacLexer.SM])
+
+    }
+
 }
