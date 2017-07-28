@@ -517,17 +517,18 @@ class CodeCompletionCore(val atn: ATN, val vocabulary: Vocabulary, val ruleNames
                     val fullPath = LinkedList(callStack)
                     fullPath.addAll(set.path)
                     if (!this.translateToRuleIndex(fullPath)) {
-                        for (symbol in set.intervals!!.toList())
-                        if (!this.ignoredTokens.contains(symbol)) {
-                            if (this.showDebugOutput) {
-                                println("=====> collected: ${this.vocabulary.getDisplayName(symbol)}")
-                            }
-                            if (!this.candidates.tokens.contains(symbol)) {
-                                this.candidates.recordToken(symbol, set.following, callStack.toMutableList()) // Following is empty if there is more than one entry in the set.
-                            } else {
-                                // More than one following list for the same symbol.
-                                if (this.candidates.tokens[symbol] != set.following) {
-                                    this.candidates.recordToken(symbol, LinkedList(), callStack.toMutableList())
+                        for (symbol in set.intervals!!.toList()) {
+                            if (!this.ignoredTokens.contains(symbol)) {
+                                if (this.showDebugOutput) {
+                                    println("=====> collected: ${this.vocabulary.getDisplayName(symbol)}")
+                                }
+                                if (!this.candidates.tokens.contains(symbol)) {
+                                    this.candidates.recordToken(symbol, set.following, callStack.toMutableList() + set.path) // Following is empty if there is more than one entry in the set.
+                                } else {
+                                    // More than one following list for the same symbol.
+                                    if (this.candidates.tokens[symbol] != set.following) {
+                                        this.candidates.recordToken(symbol, LinkedList(), callStack.toMutableList() + set.path)
+                                    }
                                 }
                             }
                         }

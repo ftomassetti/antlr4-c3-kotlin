@@ -39,8 +39,8 @@ class CodeCompletionCoreUsingSandyTest {
     @test fun emptyFileWC() {
         val code = ""
         val res = tokenSuggestedWSPWC(code)
-        assertEquals(listOf(SandyParser.RULE_sandyFile), res.tokensContext[SandyLexer.VAR])
-        assertEquals(listOf(0), res.tokensContext[SandyLexer.ID])
+        assertEquals(listOf(SandyParser.RULE_sandyFile, SandyParser.RULE_line, SandyParser.RULE_statement, SandyParser.RULE_varDeclaration), res.tokensContext[SandyLexer.VAR])
+        assertEquals(listOf(SandyParser.RULE_sandyFile, SandyParser.RULE_line, SandyParser.RULE_statement, SandyParser.RULE_assignment), res.tokensContext[SandyLexer.ID])
     }
 
     @test fun afterVar() {
@@ -226,7 +226,6 @@ class CodeCompletionCoreUsingStaMacTest {
         assertEquals(setOf(StaMacLexer.SM), completion.tokens.keys)
         assertEquals(listOf(StaMacParser.RULE_stateMachine, StaMacParser.RULE_preamble),
                 completion.tokensContext[StaMacLexer.SM])
-
     }
 
 }
