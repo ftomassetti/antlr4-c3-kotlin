@@ -15,7 +15,7 @@ buildscript {
     }
 }
 
-def c3Version = '0.1.0'
+def c3Version = '0.1.1-SNAPSHOT'
 
 task version {
     doLast {
