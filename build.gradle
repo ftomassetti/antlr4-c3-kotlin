@@ -108,3 +108,65 @@ sourceSets {
         }   
     }
 }
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+task javadocJar(type: Jar) {
+    classifier = 'javadoc'
+    from javadoc
+}
+
+task sourcesJar(type: Jar) {
+    classifier = 'sources'
+    from sourceSets.main.allSource
+}
+
+if (JavaVersion.current().isJava8Compatible()) {
+    allprojects {
+        tasks.withType(Javadoc) {
+            options.addStringOption('Xdoclint:none', '-quiet')
+        }
+    }
+}
+
+artifacts {
+    archives javadocJar, sourcesJar
+}
+
+task generatePom {
+    doLast {
+        def generatedPom = pom {
+            project {
+                name project.name
+                description 'ANTLR4-C3 provides autocompletion for ANTLR4 projects'
+                version c3Version
+                packaging 'jar'
+                url 'https://github.com/ftomassetti/antlr4-c3-kotlin'
+
+                scm {
+                    connection 'scm:git:https://github.com/ftomassetti/antlr4-c3-kotlin.git'
+                    developerConnection 'scm:git:git@github.com:ftomassetti/antlr4-c3-kotlin.git'
+                    url 'https://github.com/ftomassetti/antlr4-c3-kotlin.git'
+                }
+
+                licenses {
+                    license {
+                        name 'The MIT License (MIT)'
+                        url 'http://opensource.org/licenses/MIT'
+                        distribution 'repo'
+                    }
+                }
+
+                developers {
+                    developer {
+                        id = 'ftomassetti'
+                        name = 'Federico Tomassetti'
+                        email = 'federico@tomassetti.me'
+                    }
+                }
+            }
+        }
+        generatedPom.writeTo("$buildDir/pom.xml")
+    }
+}
