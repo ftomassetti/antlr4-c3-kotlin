@@ -1,6 +1,7 @@
 # ANTLR4-C3-Kotlin
 
 [![Build Status](https://travis-ci.org/ftomassetti/antlr4-c3-kotlin.svg?branch=master)](https://travis-ci.org/ftomassetti/antlr4-c3-kotlin)
+[![Maven Central](https://img.shields.io/maven-central/v/me.tomassetti.antlr4c3/	antlr4-c3-kotlin.svg)](http://search.maven.org/#search%7Cgav%7C1%7Cg%3A%22me.tomassetti.antlr4c3%22%20AND%20a%3A%22	antlr4-c3-kotlin%22)
 
 _The original version of this project has been created by translating to Kotlin [antlr4-c3](https://github.com/mike-lischke/antlr4-c3), a project by Mike Lischke._
 
