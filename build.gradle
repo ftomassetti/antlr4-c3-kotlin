@@ -15,7 +15,8 @@ buildscript {
     }
 }
 
-def c3Version = '0.2.0-SNAPSHOT'
+def c3Version = '0.2.0'
+ext.kolasu_version = 'v1.0.0'
 
 task version {
     doLast {
